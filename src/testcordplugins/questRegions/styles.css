@@ -150,8 +150,24 @@ div.vc-quest-regions-quest-region {
 .vc-quest-regions-age-restricted-badge {
     pointer-events: auto;
     cursor: default;
-    padding: 5px 10px;
+    padding: 5px 14px;
     background: rgb(0 0 0 / 78%);
+}
+
+.vc-quest-regions-age-restricted-badge .vc-quest-regions-badge-name {
+    font-size: 28px;
+    line-height: 1;
+    text-transform: none;
+}
+
+.vc-quest-regions-global-badge .vc-quest-regions-badge-flag {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.vc-quest-regions-global-badge .vc-quest-regions-badge-name {
+    font-size: 13px;
+    text-transform: uppercase;
 }
 
 .vc-quest-regions-quest-region-overflow-tooltip {

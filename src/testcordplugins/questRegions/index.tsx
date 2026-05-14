@@ -42,6 +42,7 @@ interface RegionRestriction {
     id: string;
     regions: string[];
     is_global?: boolean;
+    show_age_gate?: boolean;
 }
 
 interface QuestConfig {
@@ -222,6 +223,7 @@ const QUEST_REGIONS_DATASTORE_KEY = "QuestRegions_discoveredQuests_v1";
 
 const regionDisplayNames = new Intl.DisplayNames(["en"], { type: "region" });
 const DISCORD_ID_QUESTS_API_URL = new URL("https://api.discordquest.com/api/quests");
+const DISCORDQUEST_REGIONS_URL = new URL("https://api.discordquest.com/api/regions");
 const QUEST_RESTRICTIONS_URL = new URL("https://gist.githubusercontent.com/xGustavvo/3d08b7369eb34b50834815fd43176cae/raw");
 const QUEST_LIST_URL = new URL("https://raw.githubusercontent.com/xGustavvo/discord-api-tracker/refs/heads/main/quests.json");
 const USER_QUEST_LIST_URLS: Record<string, URL> = {
@@ -247,6 +249,8 @@ let activeQuestIds = new Set<string>();
 let publicQuestRegions = new Map<string, Set<string>>();
 let publicRegionQuestIds = new Map<string, Set<string>>();
 let questCardRegions = new Map<string, Set<string>>();
+let globalQuestIds = new Set<string>();
+let ageGatedQuestIds = new Set<string>();
 const discoveredQuestCache = new Map<string, ProxyQuestEntry>();
 const knownQuestIds = new Set<string>();
 const activeQuestStarts = new Map<string, Promise<string>>();
@@ -526,34 +530,19 @@ function isAgeRestrictedRating(value: unknown): boolean {
 }
 
 function isQuestAgeRestricted(quest: unknown): boolean {
-    const config = getQuestConfig(quest);
-    const explicit = getBooleanProperty(
-        quest,
-        "ageRestricted",
-        "age_restricted",
-        "isAgeRestricted",
-        "is_age_restricted",
-        "ageGate",
-        "age_gate",
-        "requiresAgeVerification",
-        "requires_age_verification",
-    ) ?? getBooleanProperty(
-        config,
-        "ageRestricted",
-        "age_restricted",
-        "isAgeRestricted",
-        "is_age_restricted",
-        "ageGate",
-        "age_gate",
-        "requiresAgeVerification",
-        "requires_age_verification",
-    );
-    if (explicit !== null) return explicit;
+    // Discord's quest objects don't expose any age-gate fields — rely solely on
+    // the gist restriction data (show_age_gate) which is indexed by quest ID.
+    const id = getStringProperty(quest, "id");
+    return id ? ageGatedQuestIds.has(id) : false;
+}
 
-    return [
-        getStringProperty(quest, "contentRating", "content_rating", "contentRatingType", "content_rating_type"),
-        getStringProperty(config, "contentRating", "content_rating", "contentRatingType", "content_rating_type"),
-    ].some(isAgeRestrictedRating);
+function isQuestGlobal(quest: unknown): boolean {
+    const id = getStringProperty(quest, "id");
+    if (!id) return false;
+    // Explicitly marked global in the gist
+    if (globalQuestIds.has(id)) return true;
+    // Not in the gist at all and not in any regional URL → treat as global
+    return !questCardRegions.has(id) && !ageGatedQuestIds.has(id);
 }
 
 function isQuestDiscoverable(quest: unknown, now = new Date()): boolean {
@@ -603,13 +592,17 @@ async function fetchUserQuests(): Promise<unknown[]> {
 }
 
 async function fetchRegionalUserQuestEntries(signal: AbortSignal): Promise<Map<string, InferredRegionRestriction>> {
-    const [regionalQuests, currentUserQuests] = await Promise.all([
-        Promise.all(Object.entries(USER_QUEST_LIST_URLS).map(async ([region, url]) => {
+    // Only count regions that the external per-region URLs explicitly report.
+    // Do NOT fold in the current user's live quests as a regional signal — a quest
+    // visible to the current user but absent from all other regional URLs is likely
+    // global, not US-only. (e.g. Subnautica was falsely labelled "United States"
+    // because it only appeared in user-quests-us.json but is available globally.)
+    const regionalQuests = await Promise.all(
+        Object.entries(USER_QUEST_LIST_URLS).map(async ([region, url]) => {
             const data = await fetchJson<UserQuestListResponse>(url, signal);
             return [region, Array.isArray(data.quests) ? data.quests : []] as const;
-        })),
-        fetchUserQuests().catch(() => []),
-    ]);
+        })
+    );
 
     const regionsByQuest = new Map<string, Set<string>>();
     const questsById = new Map<string, QuestEntry>();
@@ -626,20 +619,14 @@ async function fetchRegionalUserQuestEntries(signal: AbortSignal): Promise<Map<s
         }
     }
 
-    for (const quest of [...currentUserQuests, ...getStoredQuests()]) {
-        const id = getQuestId(quest);
-        if (!id || !isQuestActive(quest)) continue;
-        questsById.set(id, quest as QuestEntry);
-
-        const regions = regionsByQuest.get(id) ?? new Set<string>();
-        regions.add(CURRENT_USER_REGION_CODE);
-        regionsByQuest.set(id, regions);
-    }
-
     const inferredRestrictions = new Map<string, InferredRegionRestriction>();
     const allRegionCount = Object.keys(USER_QUEST_LIST_URLS).length;
+
     for (const [id, regions] of regionsByQuest) {
-        if (regions.size === 0 || regions.size === allRegionCount) continue;
+        // Quest in all tracked regions → effectively global, skip.
+        // Quest in none → no data to infer from, skip.
+        if (regions.size === 0 || regions.size >= allRegionCount) continue;
+
         inferredRestrictions.set(id, {
             ...questsById.get(id),
             id,
@@ -1616,17 +1603,22 @@ async function getUnclaimedQuests(): Promise<unknown[]> {
 
 async function loadQuestRegions(signal: AbortSignal): Promise<QuestRegionCard[]> {
     console.debug("[QuestRegions] loadQuestRegions: fetching restriction data and quest list…");
-    const [restrictionData, questsData, discordIdQuestsData, inferredRegionRestrictions, storedDiscoveredRestrictions] = await Promise.all([
+    const [restrictionData, discordQuestData, questsData, storedDiscoveredRestrictions] = await Promise.all([
         fetchJson<QuestRegionsResponse>(QUEST_RESTRICTIONS_URL, signal),
+        fetchJson<QuestRegionsResponse>(DISCORDQUEST_REGIONS_URL, signal),
         fetchJson<QuestListResponse>(QUEST_LIST_URL, signal),
-        fetchDiscordIdQuestApi(signal).catch(() => []),
-        fetchRegionalUserQuestEntries(signal),
         getStoredDiscoveredRegionRestrictions(),
     ]);
 
-    if (!Array.isArray(restrictionData.quests) || !Array.isArray(questsData)) {
-        console.debug("[QuestRegions] loadQuestRegions: unexpected data shape", {
-            restrictionQuestsIsArray: Array.isArray(restrictionData.quests),
+    fetchDiscordIdQuestApi(signal).then(discordIdQuestsData => {
+        if (!discordIdQuestsData.length) return;
+        for (const quest of discordIdQuestsData) {
+            if (typeof quest.id === "string") questMap.set(quest.id, quest as QuestEntry & { id: string; });
+        }
+    }).catch(() => { /* best-effort */ });
+
+    if (!Array.isArray(questsData)) {
+        console.debug("[QuestRegions] loadQuestRegions: unexpected quest list data shape", {
             questDataIsArray: Array.isArray(questsData),
         });
         return [];
@@ -1638,17 +1630,24 @@ async function loadQuestRegions(signal: AbortSignal): Promise<QuestRegionCard[]>
             .filter((quest): quest is QuestEntry & { id: string; } => typeof quest.id === "string")
             .map(quest => [quest.id, quest]),
     );
-    for (const quest of discordIdQuestsData) {
-        if (typeof quest.id === "string") questMap.set(quest.id, quest);
-    }
 
     const restrictionsById = new Map<string, RegionRestriction>();
-    for (const restriction of restrictionData.quests) restrictionsById.set(restriction.id, restriction);
-    for (const [id, restriction] of inferredRegionRestrictions) {
-        if (restrictionsById.has(id)) continue;
-        restrictionsById.set(id, restriction);
-        questMap.set(id, restriction);
+
+    for (const restriction of restrictionData.quests ?? []) restrictionsById.set(restriction.id, restriction);
+
+    for (const restriction of discordQuestData.quests ?? []) {
+        const existing = restrictionsById.get(restriction.id);
+        if (existing) {
+            if (restriction.show_age_gate !== undefined) existing.show_age_gate = restriction.show_age_gate;
+            if (restriction.is_global !== undefined) existing.is_global = restriction.is_global;
+            if (Array.isArray(restriction.regions) && restriction.regions.length > 0) {
+                existing.regions = Array.from(new Set([...existing.regions, ...restriction.regions])).sort();
+            }
+        } else {
+            restrictionsById.set(restriction.id, restriction);
+        }
     }
+
     for (const restriction of storedDiscoveredRestrictions) {
         const existing = restrictionsById.get(restriction.id);
         if (existing) {
@@ -1659,9 +1658,32 @@ async function loadQuestRegions(signal: AbortSignal): Promise<QuestRegionCard[]>
         questMap.set(restriction.id, restriction);
     }
 
+    // Fire inferred region fetch in the background — it only merges supplemental
+    // regions into existing gist entries and isn't needed for the initial render.
+    // Quests not in the gist are intentionally skipped (they are global).
+    fetchRegionalUserQuestEntries(signal).then(inferred => {
+        let changed = false;
+        for (const [id, restriction] of inferred) {
+            const existing = restrictionsById.get(id);
+            if (!existing) continue;
+            const merged = Array.from(new Set([...existing.regions, ...restriction.regions])).sort();
+            if (merged.length === existing.regions.length) continue;
+            restrictionsById.set(id, { ...existing, regions: merged });
+            changed = true;
+        }
+        if (changed) regionCache = null;
+    }).catch(() => { /* best-effort */ });
+
     questCardRegions = new Map();
+    globalQuestIds = new Set();
+    ageGatedQuestIds = new Set();
+
     for (const restriction of restrictionsById.values()) {
-        if (restriction.is_global || !Array.isArray(restriction.regions) || restriction.regions.length === 0) continue;
+        if (restriction.show_age_gate) ageGatedQuestIds.add(restriction.id);
+        if (restriction.is_global || !Array.isArray(restriction.regions) || restriction.regions.length === 0) {
+            globalQuestIds.add(restriction.id);
+            continue;
+        }
         questCardRegions.set(restriction.id, new Set(getAuthoritativeRegions(restriction.id, restriction.regions)));
     }
 
@@ -2069,13 +2091,22 @@ function QuestRegionOverflowBadge({ regions }: { regions: QuestRegionCard[]; }) 
 
 function QuestAgeRestrictedBadge() {
     return (
-        <Tooltip text="Age restricted">
+        <Tooltip text="Age Restricted">
             {tooltipProps => (
                 <div {...tooltipProps} className={classes(cl("badge"), cl("age-restricted-badge"))}>
                     <span className={cl("badge-name")}>🔞</span>
                 </div>
             )}
         </Tooltip>
+    );
+}
+
+function QuestGlobalBadge() {
+    return (
+        <div className={classes(cl("badge"), cl("global-badge"))}>
+            <span className={cl("badge-flag")}>🌐</span>
+            <span className={cl("badge-name")}>Global</span>
+        </div>
     );
 }
 
@@ -2113,18 +2144,20 @@ function QuestRegionInfo({ quest }: { quest: QuestLike; }) {
     }, [quest.id]);
 
     const ageRestricted = isQuestAgeRestricted(quest);
+    const isGlobal = regions !== null && regions.length === 0 && isQuestGlobal(quest);
     const visibleRegions = (regions ?? []).slice(0, QUEST_REGION_BADGE_LIMIT);
     const overflowRegions = (regions ?? []).slice(QUEST_REGION_BADGE_LIMIT);
 
-    if (!visibleRegions.length && !ageRestricted) return null;
+    if (!visibleRegions.length && !ageRestricted && !isGlobal) return null;
 
     return (
         <div className={cl("quest-region")}>
-            {ageRestricted && <QuestAgeRestrictedBadge />}
+            {isGlobal && <QuestGlobalBadge />}
             {visibleRegions.map(region => (
                 <QuestRegionBadge key={region.code} name={region.name} flagUrl={region.flagUrl} />
             ))}
             {overflowRegions.length > 0 && <QuestRegionOverflowBadge regions={overflowRegions} />}
+            {ageRestricted && <QuestAgeRestrictedBadge />}
         </div>
     );
 }
@@ -2244,6 +2277,8 @@ export default definePlugin({
         knownQuestIds.clear();
         discoveredQuestCache.clear();
         questCardRegions.clear();
+        globalQuestIds.clear();
+        ageGatedQuestIds.clear();
         activeQuestStarts.clear();
         countryProxyCache.clear();
         warmedProxyCache.clear();
