@@ -10,10 +10,9 @@ import { TestcordDevs } from "@utils/constants";
 import { openModal } from "@utils/modal";
 import definePlugin from "@utils/types";
 import type { User } from "@vencord/discord-types";
-import { FluxDispatcher, React } from "@webpack/common";
-import virtualMerge from "virtual-merge";
+import { FluxDispatcher, IconUtils, React, UsernameUtils, UserStore } from "@webpack/common";
 
-import { getCachedTarget, isActive, isCurrentUser, logger, settings, subscribe } from "./data";
+import { getCachedTarget, isActive, isCurrentUser, loadTarget, logger, setEnabled, settings, subscribe } from "./data";
 import { FakeUserProfileModal } from "./modal";
 
 const FLAG_BADGES: { flag: number; image: string; description: string; }[] = [
@@ -46,6 +45,229 @@ function getTargetProfile(): any {
     const t = getCachedTarget();
     if (!t || !settings.store.enabled) return null;
     return t.profile;
+}
+
+function buildOverrides(target: any): Record<string, unknown> {
+    const profile = getTargetProfile();
+    const banner = target.banner ?? profile?.banner ?? null;
+    const overrides: Record<string, unknown> = {
+        username: target.username,
+        globalName: target.globalName,
+        discriminator: target.discriminator,
+        avatar: target.avatar,
+        banner,
+        publicFlags: target.publicFlags ?? target.flags ?? 0,
+        flags: target.flags ?? 0,
+        premiumType: target.premiumType ?? 0,
+        accentColor: target.accentColor ?? profile?.accentColor ?? null,
+        usernameNormalized: typeof target.username === "string" ? target.username.toLowerCase() : undefined,
+        bot: target.bot ?? false,
+    };
+    if (target.primaryGuild !== undefined) overrides.primaryGuild = target.primaryGuild;
+    if (target.avatarDecorationData !== undefined) overrides.avatarDecorationData = target.avatarDecorationData;
+    if (target.clan !== undefined) overrides.clan = target.clan;
+    if (target.collectibles !== undefined) overrides.collectibles = target.collectibles;
+    if (target.displayNameStyles !== undefined) overrides.displayNameStyles = target.displayNameStyles;
+    overrides.tag = `${target.username}${target.discriminator && target.discriminator !== "0" ? `#${target.discriminator}` : ""}`;
+    return overrides;
+}
+
+function mergeUser(base: any, overrides: Record<string, unknown>): any {
+    const wrap = Object.create(Object.getPrototypeOf(base));
+    for (const key of Object.getOwnPropertyNames(base)) {
+        const desc = Object.getOwnPropertyDescriptor(base, key);
+        if (desc) {
+            try {
+                Object.defineProperty(wrap, key, desc);
+            } catch { /* ignore */ }
+        }
+    }
+    for (const sym of Object.getOwnPropertySymbols(base)) {
+        const desc = Object.getOwnPropertyDescriptor(base, sym);
+        if (desc) {
+            try {
+                Object.defineProperty(wrap, sym, desc);
+            } catch { /* ignore */ }
+        }
+    }
+    for (const key of Object.keys(overrides)) {
+        try {
+            Object.defineProperty(wrap, key, {
+                value: overrides[key],
+                writable: true,
+                enumerable: true,
+                configurable: true,
+            });
+        } catch { /* ignore */ }
+    }
+    return wrap;
+}
+
+let cachedWrap: { base: any; target: any; wrap: any; } | null = null;
+
+function wrapUser(base: any): any {
+    const target = getTargetUser();
+    if (!base || !target || !isActive()) return base;
+    if (cachedWrap && cachedWrap.base === base && cachedWrap.target === target) return cachedWrap.wrap;
+    const wrap = mergeUser(base, buildOverrides(target));
+    cachedWrap = { base, target, wrap };
+    return wrap;
+}
+
+function clearWrapCache() {
+    cachedWrap = null;
+}
+
+let originalGetUser: typeof UserStore.getUser | null = null;
+let originalGetCurrentUser: typeof UserStore.getCurrentUser | null = null;
+let originalGetUserAvatarURL: typeof IconUtils.getUserAvatarURL | null = null;
+let originalGetUserBannerURL: typeof IconUtils.getUserBannerURL | null = null;
+let originalGetName: typeof UsernameUtils.getName | null = null;
+let originalGetGlobalName: typeof UsernameUtils.getGlobalName | null = null;
+let originalGetFormattedName: typeof UsernameUtils.getFormattedName | null = null;
+let originalGetUserTag: typeof UsernameUtils.getUserTag | null = null;
+let originalUseName: typeof UsernameUtils.useName | null = null;
+let originalUseUserTag: typeof UsernameUtils.useUserTag | null = null;
+
+let storePatched = false;
+let utilsPatched = false;
+
+function patchStore() {
+    if (storePatched) return;
+    storePatched = true;
+
+    originalGetUser = UserStore.getUser;
+    originalGetCurrentUser = UserStore.getCurrentUser;
+
+    UserStore.getUser = function (userId: string) {
+        const u = originalGetUser!.call(this, userId);
+        if (!isActive() || !u) return u;
+        if (!isCurrentUser(userId)) return u;
+        return wrapUser(u);
+    };
+
+    UserStore.getCurrentUser = function () {
+        const u = originalGetCurrentUser!.call(this);
+        if (!isActive()) return u;
+        return wrapUser(u);
+    };
+}
+
+function unpatchStore() {
+    if (!storePatched) return;
+    if (originalGetUser) UserStore.getUser = originalGetUser;
+    if (originalGetCurrentUser) UserStore.getCurrentUser = originalGetCurrentUser;
+    storePatched = false;
+}
+
+function patchUtils() {
+    if (utilsPatched) return;
+    utilsPatched = true;
+
+    originalGetUserAvatarURL = IconUtils.getUserAvatarURL;
+    originalGetUserBannerURL = IconUtils.getUserBannerURL;
+    originalGetName = UsernameUtils.getName;
+    originalGetGlobalName = UsernameUtils.getGlobalName;
+    originalGetFormattedName = UsernameUtils.getFormattedName;
+    originalGetUserTag = UsernameUtils.getUserTag;
+    originalUseName = UsernameUtils.useName;
+    originalUseUserTag = UsernameUtils.useUserTag;
+
+    IconUtils.getUserAvatarURL = function (user: any, animated?: any, size?: any, format?: any) {
+        if (isActive() && user && isCurrentUser(user.id)) {
+            const t = getTargetUser();
+            if (t) return originalGetUserAvatarURL!.call(this, t, animated, size, format);
+        }
+        return originalGetUserAvatarURL!.call(this, user, animated, size, format);
+    };
+
+    IconUtils.getUserBannerURL = function (params: any) {
+        if (isActive() && params && isCurrentUser(params.id)) {
+            const t = getTargetUser() as any;
+            const targetBanner = params.banner ?? t?.banner ?? getTargetProfile()?.banner;
+            if (t && targetBanner) {
+                return originalGetUserBannerURL!.call(this, { ...params, id: t.id, banner: targetBanner });
+            }
+        }
+        return originalGetUserBannerURL!.call(this, params);
+    };
+
+    UsernameUtils.getName = function (user: User) {
+        if (isActive() && user && isCurrentUser(user.id)) {
+            const t = getTargetUser();
+            if (t) return originalGetName!.call(this, t);
+        }
+        return originalGetName!.call(this, user);
+    };
+
+    UsernameUtils.getGlobalName = function (user: User) {
+        if (isActive() && user && isCurrentUser(user.id)) {
+            const t = getTargetUser();
+            if (t) return originalGetGlobalName!.call(this, t);
+        }
+        return originalGetGlobalName!.call(this, user);
+    };
+
+    UsernameUtils.getFormattedName = function (user: User, useTag?: boolean) {
+        if (isActive() && user && isCurrentUser(user.id)) {
+            const t = getTargetUser();
+            if (t) return originalGetFormattedName!.call(this, t, useTag);
+        }
+        return originalGetFormattedName!.call(this, user, useTag);
+    };
+
+    UsernameUtils.getUserTag = function (user: User, options?: any) {
+        if (isActive() && user && isCurrentUser(user.id)) {
+            const t = getTargetUser();
+            if (t) return originalGetUserTag!.call(this, t, options);
+        }
+        return originalGetUserTag!.call(this, user, options);
+    };
+
+    UsernameUtils.useName = function (user: User) {
+        if (isActive() && user && isCurrentUser(user.id)) {
+            const t = getTargetUser();
+            if (t) return originalUseName!.call(this, t);
+        }
+        return originalUseName!.call(this, user);
+    };
+
+    UsernameUtils.useUserTag = function (user: User, options?: any) {
+        if (isActive() && user && isCurrentUser(user.id)) {
+            const t = getTargetUser();
+            if (t) return originalUseUserTag!.call(this, t, options);
+        }
+        return originalUseUserTag!.call(this, user, options);
+    };
+}
+
+function unpatchUtils() {
+    if (!utilsPatched) return;
+    if (originalGetUserAvatarURL) IconUtils.getUserAvatarURL = originalGetUserAvatarURL;
+    if (originalGetUserBannerURL) IconUtils.getUserBannerURL = originalGetUserBannerURL;
+    if (originalGetName) UsernameUtils.getName = originalGetName;
+    if (originalGetGlobalName) UsernameUtils.getGlobalName = originalGetGlobalName;
+    if (originalGetFormattedName) UsernameUtils.getFormattedName = originalGetFormattedName;
+    if (originalGetUserTag) UsernameUtils.getUserTag = originalGetUserTag;
+    if (originalUseName) UsernameUtils.useName = originalUseName;
+    if (originalUseUserTag) UsernameUtils.useUserTag = originalUseUserTag;
+    utilsPatched = false;
+}
+
+function notifyUpdate() {
+    clearWrapCache();
+    const me = originalGetCurrentUser ? originalGetCurrentUser.call(UserStore) : UserStore.getCurrentUser();
+    if (!me) return;
+    try {
+        FluxDispatcher.dispatch({ type: "USER_UPDATE", user: me });
+    } catch (e) {
+        logger.warn("USER_UPDATE dispatch failed", e);
+    }
+}
+
+function syncSpoofState() {
+    clearWrapCache();
+    notifyUpdate();
 }
 
 function FakeUserProfileIcon({ className, style }: { className?: string; style?: React.CSSProperties; }) {
@@ -82,7 +304,7 @@ function FakeUserProfileButton({ iconForeground, hideTooltips, nameplate }: User
                     openModal(modalProps => <FakeUserProfileModal modalProps={modalProps} />);
                     return;
                 }
-                settings.store.enabled = !settings.store.enabled;
+                setEnabled(!settings.store.enabled);
                 force();
             }}
         />
@@ -177,6 +399,8 @@ function buildFakeMessage(channelId: string, content: string, replyMessageRefere
     };
 }
 
+let unsub: (() => void) | null = null;
+
 export default definePlugin({
     name: "fakeUserProfile",
     description: "Click a user area button to visually spoof your client as another Discord user. Avatar, banner, badges, bio, pronouns, decorations, activities, and outgoing messages all appear as them locally.",
@@ -191,19 +415,39 @@ export default definePlugin({
         render: (props: UserAreaRenderProps) => <FakeUserProfileButton {...props} />,
     },
 
-    start() {
+    async start() {
         addProfileBadge(dynamicBadge);
+        patchStore();
+        patchUtils();
+
+        unsub = subscribe(syncSpoofState);
 
         const { targetId } = settings.store;
         if (targetId) {
-            void import("./data").then(({ loadTarget }) => {
-                loadTarget(targetId).catch(e => logger.warn("Failed to restore cached target", e));
-            });
+            try {
+                await loadTarget(targetId);
+                if (settings.store.enabled) syncSpoofState();
+            } catch (e) {
+                logger.warn("Failed to restore cached target", e);
+            }
         }
     },
 
     stop() {
+        clearWrapCache();
+        unpatchUtils();
+        unpatchStore();
         removeProfileBadge(dynamicBadge);
+        if (unsub) { unsub(); unsub = null; }
+        notifyUpdate();
+    },
+
+    flux: {
+        CONNECTION_OPEN() {
+            if (settings.store.enabled && getCachedTarget()) {
+                syncSpoofState();
+            }
+        },
     },
 
     patches: [
@@ -261,7 +505,7 @@ export default definePlugin({
         };
     },
 
-    getAvatarDecorationURL({ user, avatarDecoration, canAnimate }: { user?: User; avatarDecoration?: any; canAnimate?: boolean; }) {
+    getAvatarDecorationURL({ user, canAnimate }: { user?: User; avatarDecoration?: any; canAnimate?: boolean; }) {
         if (!isActive()) return undefined;
         const targetUserId = user?.id;
         if (!isCurrentUser(targetUserId)) return undefined;
@@ -298,7 +542,9 @@ export default definePlugin({
             if (targetProfile.userProfile) overrides.userProfile = targetProfile.userProfile;
         }
 
-        const merged = original ? virtualMerge(original, overrides) : { userId, ...overrides };
+        const merged = original
+            ? Object.assign(Object.create(Object.getPrototypeOf(original)), original, overrides)
+            : { userId, ...overrides };
         return merged;
     },
 
