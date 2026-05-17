@@ -241,7 +241,7 @@ const handleMessage = (payload: any) => {
 
     const { bannedLanguage, minMatches, logToConsole } = settings.store;
 
-    const detected = detectLanguage(message.content, bannedLanguage, minMatches);
+    const detected = detectLanguage(message.content, bannedLanguage ?? "", minMatches);
 
     if (logToConsole) {
         console.log(
@@ -258,7 +258,7 @@ const handleMessage = (payload: any) => {
             const displayName = message.author.globalName ?? message.author.username;
 
             Toasts.show({
-                message: `🚫 Blocked: ${displayName} (detected language: ${bannedLanguage.toUpperCase()})`,
+                message: `🚫 Blocked: ${displayName} (detected language: ${(bannedLanguage ?? "").toUpperCase()})`,
                 type: Toasts.Type.FAILURE,
                 id: Toasts.genId(),
             });
@@ -312,6 +312,7 @@ function AboutComponent() {
 export default definePlugin({
     name: "AutoLanguageBlock",
     description: "Automatically blocks users who write in the configured language by detecting keywords in their messages.",
+    tags: ["Servers", "Utility"],
     authors: [{ name: "nnenaza", id: 1485706082080002140n }],
     settings,
 

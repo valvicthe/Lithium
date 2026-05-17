@@ -46,6 +46,7 @@ const TBADGES_JSON_URL = "https://raw.githubusercontent.com/x2b1/tbadges/main/ba
 const TBADGES_REPO_URL = "https://raw.githubusercontent.com/x2b1/tbadges/main";
 
 const ContributorBadge: ProfileBadge = {
+    id: "vencord_contributor_badge",
     description: "Vencord Contributor",
     iconSrc: CONTRIBUTOR_BADGE,
     position: BadgePosition.START,
@@ -54,6 +55,7 @@ const ContributorBadge: ProfileBadge = {
 };
 
 const EquicordContributorBadge: ProfileBadge = {
+    id: "equicord_contributor_badge",
     description: "Equicord Contributor",
     iconSrc: EQUICORD_CONTRIBUTOR_BADGE,
     position: BadgePosition.START,
@@ -68,6 +70,7 @@ const EquicordContributorBadge: ProfileBadge = {
 };
 
 const TestcordContributorBadge: ProfileBadge = {
+    id: "testcord_contributor",
     description: "Testcord Contributor",
     iconSrc: TESTCORD_CONTRIBUTOR_BADGE,
     position: BadgePosition.START,
@@ -82,6 +85,7 @@ const TestcordContributorBadge: ProfileBadge = {
 };
 
 const UserPluginContributorBadge: ProfileBadge = {
+    id: "user_plugin_contributor_badge",
     description: "User Plugin Contributor",
     iconSrc: USERPLUGIN_CONTRIBUTOR_BADGE,
     position: BadgePosition.START,
@@ -103,6 +107,7 @@ const UserPluginContributorBadge: ProfileBadge = {
 };
 
 const TestcordAdminBadge: ProfileBadge = {
+    id: "testcord_admin",
     description: "Testcord Admin",
     iconSrc: TESTCORD_ADMIN_BADGE,
     position: BadgePosition.START,
@@ -116,6 +121,7 @@ const TestcordAdminBadge: ProfileBadge = {
 };
 
 const TestcordOwnerBadge: ProfileBadge = {
+    id: "testcord_owner",
     description: "Testcord Owner",
     iconSrc: TESTCORD_OWNER_BADGE,
     position: BadgePosition.START,
@@ -129,6 +135,7 @@ const TestcordOwnerBadge: ProfileBadge = {
 };
 
 const TestcordDevBadge: ProfileBadge = {
+    id: "testcord_developer",
     description: "Testcord Dev",
     iconSrc: TESTCORD_DEV_BADGE,
     position: BadgePosition.START,
@@ -187,7 +194,7 @@ async function loadAllBadges(noCache = false) {
 
 let intervalId: any;
 
-export function BadgeContextMenu({ badge }: { badge: ProfileBadge & BadgeUserArgs; }) {
+export function BadgeContextMenu({ badge }: { badge: Omit<ProfileBadge, "id"> & BadgeUserArgs; }) {
     return (
         <Menu.Menu
             navId="vc-badge-context"
@@ -311,7 +318,8 @@ export default definePlugin({
     },
 
     getDonorBadges(userId: string) {
-        return DonorBadges[userId]?.map(badge => ({
+        return DonorBadges[userId]?.map((badge, idx) => ({
+            id: `vencord_donor_badge_${idx}`,
             iconSrc: badge.badge,
             description: badge.tooltip,
             position: BadgePosition.START,
@@ -331,7 +339,8 @@ export default definePlugin({
     },
 
     getEquicordDonorBadges(userId: string) {
-        return EquicordDonorBadges[userId]?.map(badge => ({
+        return EquicordDonorBadges[userId]?.map((badge, idx) => ({
+            id: `equicord_donor_badge_${idx}`,
             iconSrc: badge.badge,
             description: badge.tooltip,
             position: BadgePosition.START,
@@ -373,6 +382,7 @@ export default definePlugin({
                 : `${TBADGES_REPO_URL}/${badge.badge}`;
 
             return {
+                id: `external_badge_${badge.badge}`,
                 iconSrc,
                 description: badge.tooltip,
                 position: BadgePosition.START,

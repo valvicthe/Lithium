@@ -19,8 +19,7 @@
 import { definePluginSettings } from "@api/Settings";
 import { Devs, TestcordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
-import { Text } from "@webpack/common";
-import { Common } from "webpack";
+import { Text, UserStore } from "@webpack/common";
 
 type Author = {
     nick: string;
@@ -84,6 +83,7 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "ForceRoleColor",
     description: "Forces a specific role color on yourself globally",
+    tags: ["Customisation", "Roles"],
     authors: [TestcordDevs.x2b],
     settings,
     patches: [
@@ -137,7 +137,7 @@ export default definePlugin({
 
     getColorsForMessages(message: any, old: Author): Author {
         if (
-            message.author.id !== Common.UserStore.getCurrentUser().id
+            message.author.id !== UserStore.getCurrentUser().id
             || (settings.store.dmsOnly && old.guildId)
         ) {
             return old;
@@ -155,7 +155,7 @@ export default definePlugin({
     },
 
     getColorsForMemberList(user: any, colorString: string, old: any) {
-        if (user.id !== Common.UserStore.getCurrentUser().id || settings.store.dmsOnly) {
+        if (user.id !== UserStore.getCurrentUser().id || settings.store.dmsOnly) {
             return {
                 colorString,
                 roleColorStrings: old

@@ -1400,6 +1400,7 @@ function SearchServerButton() {
 export default definePlugin({
     name: "SearchUtility",
     description: "Combines the web, message, media, quick switcher, and advanced search plugins into one utility.",
+    tags: ["Utility", "Servers"],
     authors: [TestcordDevs.x2b],
     dependencies: ["CommandsAPI"],
     settings,
@@ -1445,8 +1446,8 @@ export default definePlugin({
         {
             find: "#{intl::QUICKSWITCHER_PLACEHOLDER}",
             replacement: {
-                match: /let{selectedIndex:\i,results:\i}=this\.props/,
-                replace: "let{selectedIndex:$1,results:$2}=this.props; this.props.results = $self.modifyQuickSwitcherResults(this.state.query, $2);"
+                match: /renderInput\(\)\{return/,
+                replace: "renderInput(){try{this.props.results=Vencord.Plugins.plugins['SearchUtility'].modifyQuickSwitcherResults(this.state.query,this.props.results)}catch(e){}return"
             }
         }
     ],

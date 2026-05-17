@@ -6,14 +6,15 @@
 
 import { ApplicationCommandOptionType, sendBotMessage } from "@api/Commands";
 import { ApplicationCommandInputType } from "@api/Commands/types";
-import { Devs, TestcordDevs } from "@utils/constants";
+import { TestcordDevs } from "@utils/constants";
 import { Logger } from "@utils/Logger";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, UserStore } from "@webpack/common";
 
 export default definePlugin({
     name: "Impersonate",
-    description: "Impersonate a user and have them send a \"message\"",
+    description: "Impersonate a user and have them send a message",
+    tags: ["Fun", "Utility"],
     authors: [TestcordDevs.x2b],
     dependencies: ["CommandsAPI"],
 
@@ -56,7 +57,6 @@ export default definePlugin({
                     const user = UserStore.getUser(args[0].value);
 
                     new Logger("Nigga").log(args);
-
 
                     if (delay) {
                         FluxDispatcher.dispatch({
@@ -117,8 +117,3 @@ export default definePlugin({
         }
     ]
 });
-
-
-
-
-

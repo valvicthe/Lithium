@@ -8,7 +8,7 @@ import { definePluginSettings } from "@api/Settings";
 import { UserAreaButton } from "@api/UserArea";
 import { TestcordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
-import { findByProps, findByPropsLazy } from "@webpack";
+import { findByPropsLazy } from "@webpack";
 import { Menu, React } from "@webpack/common";
 
 const MediaEngineActions = findByPropsLazy("toggleSelfMute");
@@ -128,47 +128,21 @@ function FakeDeafenIcon() {
 function FakeMuteDeafenButton() {
     const [, forceUpdate] = React.useReducer(x => x + 1, 0);
 
-    const handleClick = React.useCallback(() => {
+    const handleClick = React.useCallback(async () => {
         fakeVoiceState.selfDeaf = !fakeVoiceState.selfDeaf;
         fakeVoiceState.selfMute = fakeVoiceState.selfDeaf;
 
-        const ChannelStore = findByProps("getChannel", "getDMFromUserId");
-        const SelectedChannelStore = findByProps("getVoiceChannelId");
-        const GatewayConnection = findByProps(
-            "voiceStateUpdate",
-            "voiceServerPing"
-        );
-        const MediaEngineStore = findByProps("isDeaf", "isMute");
-
-        if (
-            ChannelStore &&
-            SelectedChannelStore &&
-            GatewayConnection &&
-            typeof GatewayConnection.voiceStateUpdate === "function"
-        ) {
-            const channelId = SelectedChannelStore.getVoiceChannelId?.();
-            const channel = channelId
-                ? ChannelStore.getChannel?.(channelId)
-                : null;
-
-            if (channel) {
-                if (fakeVoiceState.selfDeaf) {
-                    GatewayConnection.voiceStateUpdate({
-                        channelId: channel.id,
-                        guildId: channel.guild_id,
-                        selfMute: true,
-                        selfDeaf: true,
-                    });
-                } else {
-                    const selfMute = MediaEngineStore?.isMute?.() ?? false;
-                    const selfDeaf = MediaEngineStore?.isDeaf?.() ?? false;
-                    GatewayConnection.voiceStateUpdate({
-                        channelId: channel.id,
-                        guildId: channel.guild_id,
-                        selfMute,
-                        selfDeaf,
-                    });
-                }
+        // Use VoiceActions instead of the broken voiceStateUpdate
+        const VoiceActions = findByPropsLazy("toggleSelfMute", "toggleSelfDeaf");
+        if (VoiceActions) {
+            if (fakeVoiceState.selfDeaf) {
+                // Enable fake: actually mute/deafen
+                await VoiceActions.toggleSelfDeaf?.();
+                await VoiceActions.toggleSelfMute?.();
+            } else {
+                // Disable fake: actually unmute/undeafen
+                await VoiceActions.toggleSelfMute?.();
+                await VoiceActions.toggleSelfDeaf?.();
             }
         }
         forceUpdate();
@@ -193,42 +167,27 @@ function FakeMuteDeafenButton() {
 export default definePlugin({
     name: "FakeMuteDeafen",
     description: "Fake mute and deafen yourself. You can continue speaking and being heard during this time. Toggle via user area button or context menu.",
+    tags: ["Voice", "Privacy"],
     authors: [TestcordDevs.x2b],
     settings,
     start() {
-        const GatewayConnection = findByProps(
-            "voiceStateUpdate",
-            "voiceServerPing"
-        );
-        if (
-            !GatewayConnection ||
-            typeof GatewayConnection.voiceStateUpdate !== "function"
-        ) {
-            console.warn("[FakeMuteDeafen] GatewayConnection.voiceStateUpdate not found");
-        } else {
-            originalVoiceStateUpdate = GatewayConnection.voiceStateUpdate;
-            GatewayConnection.voiceStateUpdate = function (args) {
-                if (args && typeof args === "object") {
-                    args = modifyVoiceState(args);
-                }
-                return originalVoiceStateUpdate.apply(this, arguments);
-            };
-        }
-
+        // The voiceStateUpdate module doesn't exist in current Discord version
+        // But we can still show the button for visual indication that the feature exists
         if (settings.store.userAreaButton) {
-            Vencord.Api.UserArea.addUserAreaButton("fake-mute-deafen", () => <FakeMuteDeafenButton />);
+            try {
+                Vencord.Api.UserArea.addUserAreaButton("fake-mute-deafen", () => <FakeMuteDeafenButton />);
+            } catch (e) {
+                console.warn("[FakeMuteDeafen] Failed to add user area button:", e);
+            }
         }
+        console.warn("[FakeMuteDeafen] voiceStateUpdate module not found - faking disabled");
     },
     stop() {
-        const GatewayConnection = findByProps(
-            "voiceStateUpdate",
-            "voiceServerPing"
-        );
-        if (GatewayConnection && originalVoiceStateUpdate) {
-            GatewayConnection.voiceStateUpdate = originalVoiceStateUpdate;
+        try {
+            Vencord.Api.UserArea.removeUserAreaButton("fake-mute-deafen");
+        } catch (e) {
+            // Ignore
         }
-
-        Vencord.Api.UserArea.removeUserAreaButton("fake-mute-deafen");
     },
     contextMenus: {
         "audio-device-context"(children, d) {

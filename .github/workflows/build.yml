@@ -8,7 +8,7 @@ env:
     FORCE_COLOR: true
     GITHUB_TOKEN: ${{ secrets.ETOKEN }}
     GH_TOKEN: ${{ github.token }}
-    REPO: x2b1/TestCord
+    REPO: x2b1/testcord
     USERNAME: GitHub-Actions
 
 permissions:
@@ -20,14 +20,14 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
-            - uses: pnpm/action-setup@v3
+            - uses: pnpm/action-setup@v6
 
-            - name: Use Node.js 20
-              uses: actions/setup-node@v4
+            - name: Use Node.js 24
+              uses: actions/setup-node@v6
               with:
-                  node-version: 20
+                  node-version: 24
                   cache: "pnpm"
 
             - name: Install dependencies
@@ -77,6 +77,6 @@ jobs:
                       gh release create latest --title "Testcord Latest" --notes "Automated release" --generate-notes
                   fi
 
-            - name: Upload Equicord Stable
+            - name: Upload to latest release
               run: |
                   gh release upload latest --clobber dist/release/*

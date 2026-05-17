@@ -5,7 +5,7 @@ import { Devs, EquicordDevs, TestcordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByCodeLazy, findStoreLazy, findByPropsLazy } from "@webpack";
 import { FluxDispatcher, Menu, MessageActions, MessageStore, ChannelStore, Button, Tooltip, RestAPI, useStateFromStores, SelectedGuildStore, RelationshipStore, SelectedChannelStore, Toasts, GuildStore, PermissionStore, React, UserStore } from "@webpack/common";
-import { Message, User } from "discord-types/general";
+import { Message, User } from "@vencord/discord-types";
 import { classes } from "@utils/misc";
 
 export const cl = classNameFactory("vc-voice-channel-log-");
@@ -210,7 +210,7 @@ function startOwnershipMonitoring() {
 
         if (clientChannelId && currentVcOwners.has(clientChannelId)) {
             const channel = ChannelStore.getChannel(clientChannelId);
-            if (channel && channel.guildId && isGuildAllowed(channel.guildId) && isCustomVoiceChannel(clientChannelId)) {
+            if (channel && channel.guild_id && isGuildAllowed(channel.guild_id) && isCustomVoiceChannel(clientChannelId)) {
                 updateVcOwnerTracking(clientChannelId);
             }
         }
@@ -316,6 +316,7 @@ let clientOldChannelId: string | undefined;
 export default definePlugin({
     name: "autoClaim",
     description: "Automatically claims a vc after the owner of it leaves or when joining unowned VCs (custom VCs only)",
+    tags: ["Utility", "Servers"],
     authors: [TestcordDevs.dot],
     settings,
 
@@ -484,7 +485,7 @@ export default definePlugin({
                                 attemptClaim(oldChannelId, `Auto-claim after user left - no owner detected`);
                             }
                             // If ownership transferred to someone else who just left
-                            else if (newOwner !== previousOwner && !isOwnerInChannel(oldChannelId, newOwner) && settings.store.autoClaimOnTransfer) {
+                            else if (newOwner && newOwner !== previousOwner && !isOwnerInChannel(oldChannelId, newOwner) && settings.store.autoClaimOnTransfer) {
                                 console.log(`New owner ${newOwner} not in channel ${oldChannelId}, attempting auto-claim`);
                                 attemptClaim(oldChannelId, `Auto-claim - transferred owner not present`);
                             }

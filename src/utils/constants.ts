@@ -58,6 +58,7 @@ export interface Dev {
     name: string;
     id: bigint;
     badge?: boolean;
+    github?: string;
 }
 
 /**
@@ -621,6 +622,10 @@ export const Devs = /* #__PURE__*/ Object.freeze({
         name: "jamesbt365",
         id: 158567567487795200n
     },
+    Darxoon: {
+        name: "Darxoon",
+        id: 409745838898937866n
+    },
     samsam: {
         name: "samsam",
         id: 400482410279469056n
@@ -628,6 +633,11 @@ export const Devs = /* #__PURE__*/ Object.freeze({
     Cootshk: {
         name: "Cootshk",
         id: 921605971577548820n
+    },
+    koish1: {
+        name: "koish1",
+        id: 291089948709486593n,
+        badge: false,
     },
     thororen: {
         name: "thororen",
@@ -885,8 +895,8 @@ export const EquicordDevs = Object.freeze({
         id: 1271128098301022240n
     },
     nin0dev: {
-        name: "nin0dev",
-        id: 886685857560539176n
+        name: "nin0",
+        id: 1395533040914141235n
     },
     D3SOX: {
         name: "D3SOX",
@@ -1002,7 +1012,7 @@ export const EquicordDevs = Object.freeze({
         id: 984392761929256980n
     },
     creations: {
-        name: "Creation's",
+        name: "creations",
         id: 209830981060788225n
     },
     Leko: {
@@ -1219,7 +1229,7 @@ export const EquicordDevs = Object.freeze({
     },
     prism: {
         name: "prism",
-        id: 390884143749136386n,
+        id: 390884143749136386n
     },
     square: {
         name: "square",
@@ -1247,7 +1257,7 @@ export const EquicordDevs = Object.freeze({
     },
     PWall: {
         name: "PWall",
-        id: 0n,
+        id: 0n
     },
     busyboxkitty: {
         name: "busyboxkitty",
@@ -1255,31 +1265,31 @@ export const EquicordDevs = Object.freeze({
     },
     BioTomateDE: {
         name: "BioTomateDE",
-        id: 553499669226061844n,
+        id: 553499669226061844n
     },
     korzi: {
         name: "korzi",
-        id: 740966310875365416n,
+        id: 740966310875365416n
     },
     davri: {
         name: "Davri",
-        id: 457579346282938368n,
+        id: 457579346282938368n
     },
     yash: {
         name: "yash",
-        id: 889150838658977874n,
+        id: 889150838658977874n
     },
     Leon135: {
         name: "Leon135",
-        id: 309275452231385088n,
+        id: 309275452231385088n
     },
     bbpltergiest: {
         name: "bbpltergiest",
-        id: 279448683672502274n,
+        id: 279448683672502274n
     },
     mshl: {
         name: "m.shl",
-        id: 1025245410224263258n,
+        id: 1025245410224263258n
     },
     ScattrdBlade: {
         name: "ScattrdBlade",
@@ -1287,11 +1297,43 @@ export const EquicordDevs = Object.freeze({
     },
     Ape: {
         name: "Ape",
-        id: 722832640360841308n,
+        id: 722832640360841308n
     },
     Kiri: {
         name: "Kiri",
-        id: 310525496771346434n,
+        id: 310525496771346434n
+    },
+    pointy: {
+        name: "pointy",
+        id: 99914384989519872n
+    },
+    dka: {
+        name: "DKA",
+        id: 119386840624005121n
+    },
+    Gir0fa: {
+        name: "gir0fa",
+        id: 1282734265955520545n
+    },
+    yonn2222: {
+        name: "yonn2222",
+        id: 821835831844012103n
+    },
+    Moowi: {
+        name: "Moowi",
+        id: 246128594756173824n
+    },
+    sketchmyname: {
+        name: "sketchmyname",
+        id: 1412164910443663491n
+    },
+    NassCT: {
+        name: "NassCT",
+        id: 354996937868705793n
+    },
+    dhopcs: {
+        name: "dhopcs",
+        id: 206309860038410240n
     },
 } satisfies Record<string, Dev>);
 
@@ -1302,11 +1344,16 @@ export const TestcordDevs = /* #__PURE__*/ Object.freeze({
     },
     x2b: {
         name: "x2b",
-        id: 996137713432530976n
+        id: 996137713432530976n,
+        github: "x2b1"
     },
     x2b2: {
         name: "0gfm",
         id: 209389868080562176n
+    },
+    deracul: {
+        name: "deracul",
+        id: 1454268753629024529n
     },
     Benjii: {
         name: "Benjii",
@@ -1337,8 +1384,9 @@ export const TestcordDevs = /* #__PURE__*/ Object.freeze({
         id: 1155026301791514655n
     },
     nnenaza: {
-        name: "www.miau.com",
-        id: 1485706082080002140n
+        name: "kiara",
+        id: 1501441039418785933n,
+        github: "Mixiruri"
     },
     neoarz: {
         name: "neoarz",
@@ -1382,3 +1430,6 @@ export const TestcordDevsById = /* #__PURE__*/ (() =>
             .map(([_, v]) => [v.id, v] as const)
     ))
 )() as Record<string, Dev>;
+
+
+

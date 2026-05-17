@@ -344,7 +344,11 @@ const DsaWarningsCollection = ErrorBoundary.wrap(function DsaWarningsCollection(
 export default definePlugin({
     name: "DsaWarnings",
     description: "Shows active DSA standing warnings on user profiles.",
+    tags: ["Privacy", "Utility"],
     authors: [EquicordDevs.omaw],
     managedStyle,
-    renderProfileCollection: (props: { user: User; isSideBar?: boolean; displayProfile?: { themeColors?: number[] | null; accentColor?: number | null; }; }) => <DsaWarningsCollection {...props} />,
+    renderProfileCollection: {
+        priority: 0,
+        render: (props: { user: User; isSideBar?: boolean; displayProfile?: { themeColors?: number[] | null; accentColor?: number | null; }; }) => <DsaWarningsCollection {...props} />,
+    },
 });

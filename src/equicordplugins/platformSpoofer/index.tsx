@@ -52,6 +52,7 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "PlatformSpoofer",
     description: "Spoof what platform or device you're on",
+    tags: ["Utility"],
     authors: [EquicordDevs.Drag, EquicordDevs.neoarz],
     settingsAboutComponent: () => (
         <Notice.Warning>
@@ -71,6 +72,19 @@ export default definePlugin({
                     match: /(?<="GatewaySocket"\)\}\),properties:)(\i)/,
                     replace: "{...$1,...$self.getPlatform(true)}"
                 },
+            ]
+        },
+        {
+            find: '"2025-01-virtual-currency-rollout"',
+            replacement: [
+                {
+                    match: /(?<=\}\),)(\i)/,
+                    replace: "$1=e=>({enabled:true}),_equicord_$1"
+                },
+                {
+                    match: /(?<=\.getConfig\(\i\)\.enabled\},)(\i)/,
+                    replace: "$1=e=>({enabled:true}),_equicord_$1"
+                }
             ]
         },
     ],

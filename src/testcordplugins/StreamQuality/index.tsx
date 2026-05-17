@@ -473,6 +473,7 @@ function onConnection(connection: any) {
 export default definePlugin({
     name: "CustomStreamQuality",
     description: "Customize your stream quality beyond Discord's limits. Set custom FPS, resolution, bitrate, codec, keyframe interval, and HDR.",
+    tags: ["Voice", "Utility"],
     authors: [TestcordDevs.x2b],
     settings,
     patches: [
@@ -488,12 +489,12 @@ export default definePlugin({
             find: "canUseCustomStickersEverywhere:",
             replacement: [
                 {
-                    match: /(?<=canStreamQuality:)\i/,
-                    replace: "() => true",
+                    match: /canStreamQuality:function\([^)]+\)\{[^}]+\},?/,
+                    replace: "canStreamQuality:() => true,",
                 },
                 {
-                    match: /(?<=canUseHighVideoUploadQuality:)\i/,
-                    replace: "() => true",
+                    match: /canUseHighVideoUploadQuality:function\([^)]+\)\{[^}]+\},?/,
+                    replace: "canUseHighVideoUploadQuality:() => true,",
                 },
             ],
         },

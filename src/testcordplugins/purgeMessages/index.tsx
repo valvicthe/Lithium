@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "@equicordplugins/_misc/styles.css";
-
 import { ApplicationCommandInputType, ApplicationCommandOptionType, findOption, sendBotMessage } from "@api/Commands";
 import { Devs, TestcordDevs } from "@utils/constants";
 import definePlugin from "@utils/types";
@@ -73,6 +71,7 @@ async function deleteMessages(amount: number, channel: Channel, delay: number = 
 export default definePlugin({
     name: "PurgeMessages",
     description: "Purges messages from a channel",
+    tags: ["Chat", "Utility"],
     authors: [TestcordDevs.x2b],
     settingsAboutComponent: () => <>
         <Forms.FormText className="plugin-warning">

@@ -36,7 +36,8 @@ import { Logger } from "@utils/Logger";
 import { Margins } from "@utils/margins";
 import { classes } from "@utils/misc";
 import { useAwaiter, useIntersection } from "@utils/react";
-import { Alerts, lodash, Parser, React, Select, TextInput, Toasts, Tooltip, useCallback, useMemo, useState } from "@webpack/common";
+import { PluginTag, PluginTags } from "@utils/types";
+import { Alerts, lodash, Parser, React, SearchableSelect, Select, TextInput, Toasts, Tooltip, useCallback, useMemo, useRef, useState } from "@webpack/common";
 import { JSX } from "react";
 
 import Plugins, { ExcludedPlugins, PluginMeta } from "~plugins";
@@ -147,7 +148,8 @@ function ExcludedPluginsList({ search }: { search: string; }) {
 
 export default function PluginSettings() {
     const settings = useSettings();
-    const changes = React.useMemo(() => new ChangeList<string>(), []);
+    const changeRef = useRef<ChangeList<string>>(null);
+    const changes = changeRef.current ??= new ChangeList<string>();
 
     React.useEffect(() => {
         return () => {
@@ -198,33 +200,40 @@ export default function PluginSettings() {
 
     const hasUserPlugins = useMemo(() => !IS_STANDALONE && Object.values(PluginMeta).some(m => m.userPlugin), []);
 
-    const [searchValue, setSearchValue] = useState({ value: "", status: SearchStatus.ALL });
-    const [searchInput, setSearchInput] = useState("");
-
-    const debouncedSetSearch = useMemo(
-        () => debounce((query: string) => setSearchValue(prev => ({ ...prev, value: query })), 150),
-        []
-    );
+    const [searchValue, setSearchValue] = useState({ value: "", tags: [] as PluginTag[], status: SearchStatus.ALL, author: "" });
 
     const search = searchValue.value.toLowerCase();
-    const onSearch = useCallback((query: string) => {
-        setSearchInput(query);
-        debouncedSetSearch(query);
-    }, [debouncedSetSearch]);
-    const onStatusChange = useCallback((status: SearchStatus) => {
-        setSearchValue(prev => ({ ...prev, status }));
-    }, []);
+    const onSearch = (query: string) => setSearchValue(prev => ({ ...prev, value: query }));
+
+    const authorOptions = useMemo(() => {
+        const authors = new Map();
+        for (const plugin of sortedPlugins) {
+            const meta = PluginMeta[plugin.name];
+            const folder = meta ? meta.folderName : "";
+            const category = folder.startsWith("src/testcordplugins/") ? "Testcord" : folder.startsWith("src/equicordplugins/") ? "Equicord" : folder.startsWith("src/plugins/") ? "Vencord" : "Other";
+            for (const author of (plugin.authors || [])) {
+                if (!author || !author.name) continue;
+                if (!authors.has(author.name)) authors.set(author.name, { category, github: (author).github });
+            }
+        }
+        const grouped = { Testcord: [], Equicord: [], Vencord: [], Other: [] };
+        for (const [name, info] of authors.entries()) grouped[info.category].push(name);
+        const result = [];
+        for (const [cat, names] of Object.entries(grouped)) {
+            for (const name of names.sort()) { const info = authors.get(name); result.push({ label: name + " (" + cat + ")", value: name, github: info.github }); }
+        }
+        return result;
+    }, [sortedPlugins]);
 
     const pluginFilter = useCallback((plugin: typeof Plugins[keyof typeof Plugins], newPluginsSet: Set<string> | null) => {
-        const { status } = searchValue;
-        const enabled = isPluginEnabled(plugin.name);
+        const { status, tags } = searchValue;
 
         switch (status) {
             case SearchStatus.DISABLED:
-                if (enabled) return false;
+                if (isPluginEnabled(plugin.name)) return false;
                 break;
             case SearchStatus.ENABLED:
-                if (!enabled) return false;
+                if (!isPluginEnabled(plugin.name)) return false;
                 break;
             case SearchStatus.EQUICORD:
                 if (!PluginMeta[plugin.name].folderName.startsWith("src/equicordplugins/")) return false;
@@ -252,12 +261,17 @@ export default function PluginSettings() {
                     plugin.tags?.includes("betterdiscord");
         }
 
+        if (tags.length && tags.some(t => !plugin.tags?.includes(t))) return false;
+
+        if (searchValue.author && !plugin.authors?.some(a => a?.name === searchValue.author)) return false;
+
         if (!search.length) return true;
 
         return (
             plugin.name.toLowerCase().includes(search.replace(/\s+/g, "")) ||
+            plugin.name.match(/[A-Z]/g)?.join("").toLowerCase().includes(search) || // acronyms like BF for BetterFolders
             plugin.description.toLowerCase().includes(search) ||
-            plugin.tags?.some(t => t.toLowerCase().includes(search))
+            plugin.searchTerms?.some(t => t.toLowerCase().includes(search))
         );
     }, [searchValue, search]);
 
@@ -395,6 +409,7 @@ export default function PluginSettings() {
     }, [isSentinelVisible, visibleCount, plugins.length, dLoadMore]);
 
     const visiblePlugins = plugins.slice(0, visibleCount);
+    const authorGithub = searchValue.author ? ("https://github.com/" + (authorOptions.find(a => a.value === searchValue.author)?.github || searchValue.author)) : "";
 
     return (
         <SettingsTab>
@@ -419,35 +434,67 @@ export default function PluginSettings() {
                 Filters
             </HeadingTertiary>
 
-            <div className={classes(Margins.bottom20, cl("filter-controls"))}>
-                <ErrorBoundary noop>
-                    <TextInput autoFocus value={searchInput} placeholder="Search for a plugin..." onChange={onSearch} />
-                </ErrorBoundary>
-                <div>
-                    <ErrorBoundary noop>
-                        <Select
-                            options={[
-                                { label: "Show All", value: SearchStatus.ALL, default: true },
-                                { label: "Show Enabled", value: SearchStatus.ENABLED },
-                                { label: "Show Disabled", value: SearchStatus.DISABLED },
-                                { label: "Show Equicord", value: SearchStatus.EQUICORD },
-                                { label: "Show Testcord", value: SearchStatus.TESTCORD },
-                                { label: "Show Vencord", value: SearchStatus.VENCORD },
-                                { label: "Show New", value: SearchStatus.NEW },
-                                hasUserPlugins && { label: "Show UserPlugins", value: SearchStatus.USER_PLUGINS },
-                                { label: "Show API Plugins", value: SearchStatus.API_PLUGINS },
-                                { label: "Show BetterDiscord", value: SearchStatus.BETTERDISCORD },
-                            ].filter(isTruthy)}
-                            serialize={String}
-                            select={onStatusChange}
-                            isSelected={v => v === searchValue.status}
-                            closeOnSelect={true}
-                        />
-                    </ErrorBoundary>
-                </div>
-            </div>
+            <ErrorBoundary noop>
+                <TextInput
+                    inputClassName={cl("filter-control")}
+                    placeholder="Search for a plugin..."
+                    value={searchValue.value}
+                    onChange={onSearch}
+                    autoFocus
+                />
+            </ErrorBoundary>
 
-            <HeadingTertiary className={Margins.top20}>Plugins</HeadingTertiary>
+            <ErrorBoundary noop>
+                <div className={classes(Margins.bottom8, Margins.top8, cl("filter-controls"))}>
+                    <Select
+                        options={[
+                            { label: "Show All", value: SearchStatus.ALL, default: true },
+                            { label: "Show Enabled", value: SearchStatus.ENABLED },
+                            { label: "Show Disabled", value: SearchStatus.DISABLED },
+                            { label: "Show Equicord", value: SearchStatus.EQUICORD },
+                            { label: "Show Testcord", value: SearchStatus.TESTCORD },
+                            { label: "Show Vencord", value: SearchStatus.VENCORD },
+                            { label: "Show New", value: SearchStatus.NEW },
+                            hasUserPlugins && { label: "Show UserPlugins", value: SearchStatus.USER_PLUGINS },
+                            { label: "Show API Plugins", value: SearchStatus.API_PLUGINS },
+                            { label: "Show BetterDiscord", value: SearchStatus.BETTERDISCORD },
+                        ].filter(isTruthy)}
+                        serialize={String}
+                        select={status => setSearchValue(prev => ({ ...prev, status }))}
+                        isSelected={v => v === searchValue.status}
+                        closeOnSelect={true}
+                        placeholder="Filter by Type"
+                    />
+                    <SearchableSelect
+                        options={PluginTags.map(tag => ({ label: tag, value: tag }))}
+                        value={searchValue.tags}
+                        onChange={tags => setSearchValue(prev => ({ ...prev, tags }))}
+                        closeOnSelect={false}
+                        placeholder="Filter by Tags"
+                        multi
+                    />
+                    <SearchableSelect
+                        options={[{ label: "All Authors", value: "" }, ...authorOptions]}
+                        value={searchValue.author}
+                        onChange={(v) => setSearchValue(prev => ({ ...prev, author: v ?? "" }))}
+                        closeOnSelect={true}
+                        placeholder="Filter by Author"
+                    />
+                    {searchValue.author && (
+                        <a
+                            href={authorGithub}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-link)", fontSize: "14px", textDecoration: "none", whiteSpace: "nowrap" }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+                            {authorOptions.find(a => a.value === searchValue.author)?.github || searchValue.author}
+                        </a>
+                    )}
+                </div>
+            </ErrorBoundary>
+
+            <HeadingTertiary className={classes(Margins.top20, Margins.bottom8)} style={{ marginTop: "3.5rem" }}>Plugins</HeadingTertiary>
 
             {plugins.length || requiredPlugins.length
                 ? (
@@ -471,6 +518,7 @@ export default function PluginSettings() {
             <HeadingTertiary className={classes(Margins.top20, Margins.bottom8)}>
                 Required Plugins
             </HeadingTertiary>
+
             <div className={cl("grid")}>
                 {requiredPlugins.length
                     ? requiredPlugins
@@ -489,3 +537,21 @@ export function PluginDependencyList({ deps }: { deps: string[]; }) {
         </>
     );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

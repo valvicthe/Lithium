@@ -16,37 +16,70 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Devs, TestcordDevs } from "@utils/constants";
-import definePlugin from "@utils/types";
+import { definePluginSettings } from "@api/Settings";
+import definePlugin, { OptionType } from "@utils/types";
+import { findComponentByCodeLazy } from "@webpack";
 
-import { addSettingsPanelButton, Emitter, MicrophoneSettingsIcon, removeSettingsPanelButton } from "../philsPluginLibrary";
-import { PluginInfo } from "./constants";
-import { openMicrophoneSettingsModal } from "./modals";
-import { MicrophonePatcher } from "./patchers";
-import { initMicrophoneStore } from "./stores";
+import { PluginInfo } from "../betterMicrophone.desktop/constants";
+import { openMicrophoneSettingsModal } from "../betterMicrophone.desktop/modals";
+import { MicrophonePatcher } from "../betterMicrophone.desktop/patchers";
+import { initMicrophoneStore } from "../betterMicrophone.desktop/stores";
+import { Emitter, MicrophoneSettingsIcon } from "../philsPluginLibrary";
+
+const Button = findComponentByCodeLazy(".NONE,disabled:", ".PANEL_BUTTON");
+
+function micSettingsButton() {
+    const { hideSettingsIcon } = settings.use(["hideSettingsIcon"]);
+    if (hideSettingsIcon) return null;
+    return (
+        <Button
+            tooltipText="Change screenshare settings"
+            icon={MicrophoneSettingsIcon}
+            role="button"
+            onClick={openMicrophoneSettingsModal}
+        />
+    );
+}
+
+const settings = definePluginSettings({
+    hideSettingsIcon: {
+        type: OptionType.BOOLEAN,
+        description: "Hide the settings icon",
+        default: true,
+    }
+});
 
 export default definePlugin({
-    name: "BetterMicrophone",
+    name: "BetterMicrophone", hidden: true,
     description: "This plugin allows you to further customize your microphone.",
-    authors: [TestcordDevs.x2b],
+    tags: ["Voice", "Utility"],
+    authors: [{
+        name: "philhk",
+        id: 0n
+    }],
     dependencies: ["PhilsPluginLibrary"],
+    patches: [
+        {
+            find: "#{intl::ACCOUNT_SPEAKING_WHILE_MUTED}",
+            replacement: {
+                match: /className:\i\.buttons,.{0,50}children:\[/,
+                replace: "$&$self.micSettingsButton(),"
+            }
+        }
+    ],
+    settings: settings,
     start(): void {
         initMicrophoneStore();
 
         this.microphonePatcher = new MicrophonePatcher().patch();
-
-        addSettingsPanelButton({ name: PluginInfo.PLUGIN_NAME, icon: MicrophoneSettingsIcon, tooltipText: "Microphone Settings", onClick: openMicrophoneSettingsModal });
     },
     stop(): void {
         this.microphonePatcher?.unpatch();
 
         Emitter.removeAllListeners(PluginInfo.PLUGIN_NAME);
-
-        removeSettingsPanelButton(PluginInfo.PLUGIN_NAME);
-    }
+    },
+    toolboxActions: {
+        "Open Microphone Settings": openMicrophoneSettingsModal
+    },
+    micSettingsButton
 });
-
-
-
-
-
