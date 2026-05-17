@@ -9,7 +9,7 @@ import { Link } from "@components/Link";
 import { TestcordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByPropsLazy } from "@webpack";
-import { showToast, Toasts, UserSettingsActionCreators } from "@webpack/common";
+import { showToast, Toasts, UserSettingsActionCreators, UserSettingsProtoStore } from "@webpack/common";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -53,70 +53,53 @@ const settings = definePluginSettings({
 
 const UserSettingsDelay = findByPropsLazy("INFREQUENT_USER_ACTION");
 
-function getFrecencyStore(): any {
-    const wreq = (window as any).Vencord?.Webpack?.wreq;
-    if (!wreq?.c) return null;
-    for (const key of Object.keys(wreq.c)) {
-        try {
-            const m = wreq.c[key].exports;
-            if (m?.bW && typeof m.bW === "object" && typeof m.bW.getCurrentValue === "function") {
-                return m.bW;
-            }
-        } catch { }
-    }
-    return null;
-}
-
-function getAddGifFn(): ((gif: any) => void) | null {
+function getFrecencyActions(): any | null {
     try {
-        const store = getFrecencyStore();
-        if (!store) return null;
-        const state = store.getCurrentValue();
-        if (!state?.favoriteGifs?.gifs) return null;
-
-        return (gif: any) => {
-            const currentState = store.getCurrentValue();
-            const gifs = currentState?.favoriteGifs?.gifs ?? {};
-            const orders = Object.values(gifs).map((g: any) => g.order ?? 0);
-            const maxOrder = orders.length > 0 ? Math.max(...orders) : 0;
-            const newOrder = maxOrder + 1;
-
-            UserSettingsActionCreators.FrecencyUserSettingsActionCreators.updateAsync(
-                "favoriteGifs",
-                (prev: any) => {
-                    const existingGifs = prev?.favoriteGifs?.gifs ?? {};
-                    if (existingGifs[gif.url]) return prev;
-                    return {
-                        ...prev,
-                        favoriteGifs: {
-                            ...prev?.favoriteGifs,
-                            gifs: {
-                                ...existingGifs,
-                                [gif.url]: {
-                                    ...gif,
-                                    order: newOrder,
-                                }
-                            }
-                        }
-                    };
-                },
-                UserSettingsDelay?.INFREQUENT_USER_ACTION ?? 3
-            );
-        };
+        return UserSettingsActionCreators?.FrecencyUserSettingsActionCreators ?? null;
     } catch {
         return null;
     }
 }
 
 function getCurrentGifs(): Record<string, GifEntry> {
-    const store = getFrecencyStore();
-    if (!store) return {};
     try {
-        const state = store.getCurrentValue();
-        return state?.favoriteGifs?.gifs ?? {};
-    } catch {
-        return {};
-    }
+        const fromProto = UserSettingsProtoStore?.frecencyWithoutFetchingLatest?.favoriteGifs?.gifs;
+        if (fromProto) return fromProto;
+    } catch { }
+    try {
+        const fromActions = getFrecencyActions()?.getCurrentValue?.()?.favoriteGifs?.gifs;
+        if (fromActions) return fromActions;
+    } catch { }
+    return {};
+}
+
+function getAddGifFn(): ((gif: any) => void) | null {
+    const actions = getFrecencyActions();
+    if (!actions || typeof actions.updateAsync !== "function") return null;
+
+    return (gif: any) => {
+        const existing = getCurrentGifs();
+        const orders = Object.values(existing).map((g: any) => g?.order ?? 0);
+        const maxOrder = orders.length > 0 ? Math.max(...orders) : 0;
+        const newOrder = maxOrder + 1;
+
+        actions.updateAsync(
+            "favoriteGifs",
+            (favoriteGifs: any) => {
+                if (!favoriteGifs) return;
+                if (!favoriteGifs.gifs) favoriteGifs.gifs = {};
+                if (favoriteGifs.gifs[gif.url]) return;
+                favoriteGifs.gifs[gif.url] = {
+                    src: gif.src ?? gif.url,
+                    width: Number(gif.width) || 498,
+                    height: Number(gif.height) || 280,
+                    format: Number(gif.format) || 2,
+                    order: newOrder,
+                };
+            },
+            UserSettingsDelay?.INFREQUENT_USER_ACTION ?? 3
+        );
+    };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -490,6 +473,9 @@ export default definePlugin({
     },
 
     start() {
+        try {
+            UserSettingsActionCreators?.FrecencyUserSettingsActionCreators?.loadIfNecessary?.();
+        } catch { }
         startObserver();
     },
 
