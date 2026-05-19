@@ -174,7 +174,7 @@ export default definePlugin({
     name: "AntiAntilog",
     description: "Counters antilog plugins so deleted messages stay visible as deletions, and keeps removed image/video embeds and attachments from disappearing.",
     tags: ["Privacy", "Utility", "Chat"],
-    authors: [TestcordDevs.x2b],
+    authors: [TestcordDevs.x2b, TestcordDevs.sirphantom89],
     settings,
 
     maybeStripAntilogNonce,
