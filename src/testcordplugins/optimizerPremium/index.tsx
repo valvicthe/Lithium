@@ -475,7 +475,7 @@ export default definePlugin({
 
         if (settings.store.virtualizeMessages) {
             rules.push(
-                `[class*="messageListItem_"] { content-visibility: auto; contain-intrinsic-size: auto 44px; }`
+                `[class*="messageListItem_"] { contain: layout style; }`
             );
         }
 
