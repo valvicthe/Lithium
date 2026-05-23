@@ -14,7 +14,7 @@ import definePlugin, { OptionType } from "@utils/types";
 import { Message } from "@vencord/discord-types";
 import { RestAPI, showToast, Toasts, UserStore } from "@webpack/common";
 
-import { addLog, type RedeemType } from "./store";
+import { addLog, loadLogs, type RedeemType } from "./store";
 
 const logger = new Logger("AutoRedeem");
 
@@ -55,6 +55,7 @@ export default definePlugin({
     settings,
 
     start() {
+        loadLogs();
         if (!SettingsPlugin.customEntries.some(e => e.key === SETTINGS_KEY)) {
             SettingsPlugin.customEntries.push({
                 key: SETTINGS_KEY,
@@ -70,29 +71,30 @@ export default definePlugin({
     },
 
     flux: {
-        async MESSAGE_CREATE({ optimistic, type, message }: IMessageCreate) {
+        MESSAGE_CREATE({ optimistic, type, message }: IMessageCreate) {
             if (optimistic || type !== "MESSAGE_CREATE") return;
             if (message.state === "SENDING") return;
             if (settings.store.ignoreBots && message.author?.bot) return;
             if (settings.store.ignoreSelf && message.author?.id === UserStore.getCurrentUser()?.id) return;
 
             const codes = [...message.content.matchAll(GIFT_REGEX)].map(m => m[1]);
+            if (!codes.length) return;
+
             for (const code of codes) {
-                try {
-                    const { body } = await RestAPI.post({
-                        url: `/entitlements/gift-codes/${code}/redeem`,
-                        body: { channel_id: null },
-                    });
+                RestAPI.post({
+                    url: `/entitlements/gift-codes/${code}/redeem`,
+                    body: { channel_id: null },
+                }).then(({ body }) => {
                     const giftType = classifyGift(body);
-                    await addLog({ code, status: "success", type: giftType, channelId: message.channel_id, messageId: message.id });
+                    addLog({ code, status: "success", type: giftType, channelId: message.channel_id, messageId: message.id });
                     showToast(`Redeemed gift: ${code}`, Toasts.Type.SUCCESS);
                     logger.info(`Redeemed gift code: ${code}`);
-                } catch (e: any) {
+                }).catch((e: any) => {
                     const msg = e?.body?.message ?? "Unknown error";
-                    await addLog({ code, status: "failed", type: "other", error: msg, channelId: message.channel_id, messageId: message.id });
+                    addLog({ code, status: "failed", type: "other", error: msg, channelId: message.channel_id, messageId: message.id });
                     showToast(`Failed to redeem ${code}: ${msg}`, Toasts.Type.FAILURE);
                     logger.warn(`Failed to redeem ${code}:`, msg);
-                }
+                });
             }
         },
     },
