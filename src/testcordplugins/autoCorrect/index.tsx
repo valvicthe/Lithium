@@ -5,6 +5,7 @@
  */
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { React } from "@webpack/common";
@@ -14,6 +15,12 @@ import { showApiKeyWarning } from "@utils/apiKeyWarning";
 // ── Settings ───────────────────────────────────────────────────────────────────
 
 const settings = definePluginSettings({
+    showOnTopBar: {
+        type: OptionType.BOOLEAN,
+        description: "Show button on the top bar instead of the chat bar",
+        default: false,
+        restartNeeded: true,
+    },
     isActive: {
         type: OptionType.BOOLEAN,
         description: "Enable automatic correction",
@@ -129,7 +136,7 @@ function AutoCorrectIcon({ enabled }: { enabled: boolean; }) {
 const AutoCorrectChatBarButton: ChatBarButtonFactory = ({ type }) => {
     const [enabled, setEnabled] = React.useState(settings.store.isActive);
     const validChat = ["normal", "sidebar"].some(x => type.analyticsName === x);
-    if (!validChat) return null;
+    if (!validChat || settings.store.showOnTopBar) return null;
 
     const toggle = async () => {
         if (!enabled) {
@@ -160,12 +167,25 @@ const AutoCorrectChatBarButton: ChatBarButtonFactory = ({ type }) => {
 
 export default definePlugin({
     name: "AutoCorrectNC",
-    enabledByDefault: true,
-    description: "Automatically corrects spelling and grammar before sending. Requires a free Groq API key configured in NightcordAI.",
+    description: "Automatically corrects spelling and grammar before sending. Requires a free Groq API key configured in TestcordAI.",
     authors: [{ name: "Nightcord", id: 0n }],
     settings,
 
-    start() { },
+    start() {
+        if (settings.store.showOnTopBar) {
+            addHeaderBarButton("AutoCorrect", () => (
+                <HeaderBarButton
+                    icon={() => <AutoCorrectIcon enabled={settings.store.isActive} />}
+                    tooltip="AutoCorrect"
+                    onClick={() => { settings.store.isActive = !settings.store.isActive; }}
+                />
+            ), 5);
+        }
+    },
+
+    stop() {
+        removeHeaderBarButton("AutoCorrect");
+    },
 
     chatBarButton: {
         icon: () => <AutoCorrectIcon enabled={settings.store.isActive} />,

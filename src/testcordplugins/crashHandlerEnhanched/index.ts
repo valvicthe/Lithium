@@ -491,7 +491,6 @@ export default definePlugin({
     description: "Advanced crash handling with detailed logging, statistics, preventive measures, and intelligent recovery",
     tags: ["Developers", "Utility"],
     authors: [Devs.Nuckyz],
-    enabledByDefault: true,
 
     settings,
 

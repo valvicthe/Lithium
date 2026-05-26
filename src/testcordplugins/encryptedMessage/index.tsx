@@ -6,9 +6,20 @@
 
 import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
-import definePlugin from "@utils/types";
+import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
+import { definePluginSettings } from "@api/Settings";
+import definePlugin, { OptionType } from "@utils/types";
 import { Menu, Parser, Toasts, useState, useEffect, React } from "@webpack/common";
 import type { Message } from "@vencord/discord-types";
+
+const encryptSettings = definePluginSettings({
+    showOnTopBar: {
+        type: OptionType.BOOLEAN,
+        description: "Show button on the top bar instead of the chat bar",
+        default: false,
+        restartNeeded: true,
+    },
+});
 
 const MARKER = "\u200B\u200C\u200D";
 
@@ -180,7 +191,7 @@ function TechniqueMenu() {
 const EncryptButton: ChatBarButtonFactory = ({ type }) => {
     const [enabled, setEnabled] = React.useState(encryptionEnabled);
 
-    if (!["normal", "sidebar"].some(n => type.analyticsName === n)) return null;
+    if (!["normal", "sidebar"].some(n => type.analyticsName === n) || encryptSettings.store.showOnTopBar) return null;
 
     const tooltip = enabled
         ? `Encryption active — Technique ${currentTechnique}`
@@ -290,10 +301,10 @@ const messageContextPatch = (children: any, { message }: { message: any; }) => {
 
 export default definePlugin({
     name: "EncryptedMessage",
-    enabledByDefault: true,
     description: "Encrypts your messages with 400 unique techniques (0–399). Only those who know the key can decrypt.",
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["ChatInputButtonAPI", "MessageEventsAPI", "MessageAccessoriesAPI"],
+    settings: encryptSettings,
 
     chatBarButton: {
         icon: () => <LockIcon enabled={encryptionEnabled} />,
@@ -304,10 +315,20 @@ export default definePlugin({
 
     start() {
         addContextMenuPatch("message", messageContextPatch);
+        if (encryptSettings.store.showOnTopBar) {
+            addHeaderBarButton("EncryptedMessage", () => (
+                <HeaderBarButton
+                    icon={() => <LockIcon enabled={encryptionEnabled} />}
+                    tooltip="Encryption"
+                    onClick={() => { encryptionEnabled = !encryptionEnabled; }}
+                />
+            ), 5);
+        }
     },
 
     stop() {
         removeContextMenuPatch("message", messageContextPatch);
+        removeHeaderBarButton("EncryptedMessage");
         encryptionEnabled = false;
     },
 

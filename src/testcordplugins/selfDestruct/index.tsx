@@ -5,6 +5,7 @@
  */
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByPropsLazy, findStoreLazy } from "@webpack";
@@ -18,6 +19,12 @@ const UserStore = findStoreLazy("UserStore");
 // ── Settings ───────────────────────────────────────────────────────────────────
 
 const settings = definePluginSettings({
+    showOnTopBar: {
+        type: OptionType.BOOLEAN,
+        description: "Show button on the top bar instead of the chat bar",
+        default: false,
+        restartNeeded: true,
+    },
     active: {
         type: OptionType.BOOLEAN,
         description: "SelfDestruct active (toggle in chat bar)",
@@ -185,7 +192,7 @@ function SelfDestructIcon({ active, width = 20, height = 20 }: { active?: boolea
 const SelfDestructButton: ChatBarButtonFactory = ({ isMainChat }) => {
     const [active, setActive] = React.useState(settings.store.active);
 
-    if (!isMainChat) return null;
+    if (!isMainChat || settings.store.showOnTopBar) return null;
 
     function toggle() {
         settings.store.active = !settings.store.active;
@@ -210,7 +217,6 @@ const SelfDestructButton: ChatBarButtonFactory = ({ isMainChat }) => {
 
 export default definePlugin({
     name: "SelfDestruct",
-    enabledByDefault: true,
     description: "Sends messages that are automatically deleted after a configurable delay. Red timer visible on each message.",
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["ChatInputButtonAPI", "MessageAccessoriesAPI"],
@@ -242,10 +248,19 @@ export default definePlugin({
     },
 
     start() {
-        // Reset au démarrage — pas de timers persistants
+        if (settings.store.showOnTopBar) {
+            addHeaderBarButton("SelfDestruct", () => (
+                <HeaderBarButton
+                    icon={() => <SelfDestructIcon active={settings.store.active} />}
+                    tooltip="SelfDestruct"
+                    onClick={() => { settings.store.active = !settings.store.active; }}
+                />
+            ), 5);
+        }
     },
 
     stop() {
         cleanup();
+        removeHeaderBarButton("SelfDestruct");
     },
 });

@@ -38,7 +38,6 @@ export default definePlugin({
     name: "FixKrisp",
     description: "Forces Krisp (Noise Suppression) to be available and auto-resets the audio pipeline so only background noise is suppressed (not the whole voice).",
     authors: [{ name: "Nightcord", id: 0n }],
-    enabledByDefault: true,
     required: true,
 
     _callCleanup: null as (() => void) | null,

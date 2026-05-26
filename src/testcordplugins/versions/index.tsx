@@ -14,7 +14,6 @@ export default definePlugin({
     description: "Adds extra information to the version info",
     tags: ["Utility", "Developers"],
     authors: [TestcordDevs.x2b],
-    enabledByDefault: true,
 
     patches: [
         {

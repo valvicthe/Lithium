@@ -5,6 +5,7 @@
  */
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { ComponentDispatch, React, useEffect, useRef, useState, MediaEngineStore, showToast, Toasts } from "@webpack/common";
@@ -14,6 +15,12 @@ import { showApiKeyWarning } from "@utils/apiKeyWarning";
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 const settings = definePluginSettings({
+    showOnTopBar: {
+        type: OptionType.BOOLEAN,
+        description: "Show button on the top bar instead of the chat bar",
+        default: false,
+        restartNeeded: true,
+    },
     language: {
         type: OptionType.SELECT,
         description: "Transcription language. Auto-detect may occasionally hallucinate English.",
@@ -335,7 +342,7 @@ const VoiceDictationButton: ChatBarButtonFactory = ({ isMainChat }) => {
         else startDictation();
     }
 
-    if (!isMainChat) return null;
+    if (!isMainChat || settings.store.showOnTopBar) return null;
 
     const tooltip = errorMsg
         ? errorMsg
@@ -356,8 +363,7 @@ const VoiceDictationButton: ChatBarButtonFactory = ({ isMainChat }) => {
 
 export default definePlugin({
     name: "VoiceDictation",
-    enabledByDefault: true,
-    description: "Real-time voice dictation via Groq Whisper (free). API key shared with NightcordAI.",
+    description: "Real-time voice dictation via Groq Whisper (free). API key shared with TestcordAI.",
     authors: [{ name: "User", id: 0n }],
     dependencies: ["ChatInputButtonAPI"],
     settings,
@@ -365,5 +371,21 @@ export default definePlugin({
     chatBarButton: {
         icon: DictationIcon as any,
         render: VoiceDictationButton,
+    },
+
+    start() {
+        if (settings.store.showOnTopBar) {
+            addHeaderBarButton("VoiceDictation", () => (
+                <HeaderBarButton
+                    icon={() => <DictationIcon />}
+                    tooltip="Voice Dictation"
+                    onClick={() => {}}
+                />
+            ), 5);
+        }
+    },
+
+    stop() {
+        removeHeaderBarButton("VoiceDictation");
     },
 });

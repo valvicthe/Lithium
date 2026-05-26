@@ -673,7 +673,6 @@ const settings = definePluginSettings({
 
 export default definePlugin({
     name: "ServerCloner",
-    enabledByDefault: true,
     description: "Clone an entire server (channels, roles, permissions, icon, emojis, embeds) to a server where you have ADMIN permission. Can be opened from server context menu.",
     authors: [{ name: "Nightcord", id: 0n }],
     settings,

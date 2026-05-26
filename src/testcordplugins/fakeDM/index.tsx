@@ -11,7 +11,9 @@
 import "./styles.css";
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
-import definePlugin from "@utils/types";
+import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
+import { definePluginSettings } from "@api/Settings";
+import definePlugin, { OptionType } from "@utils/types";
 import { findStoreLazy } from "@webpack";
 import { FluxDispatcher, React, SelectedChannelStore, UserStore, ReactDOM } from "@webpack/common";
 
@@ -31,6 +33,15 @@ function randomSeconds(date: Date): Date {
 }
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
+const fakeDMSettings = definePluginSettings({
+    showOnTopBar: {
+        type: OptionType.BOOLEAN,
+        description: "Show button on the top bar instead of the chat bar",
+        default: false,
+        restartNeeded: true,
+    },
+});
+
 const STORAGE_KEY = "nightcord_fakedm_fakes";
 
 interface PersistedMessage {
@@ -567,7 +578,7 @@ const FakeDMButton: ChatBarButtonFactory = (props: any) => {
 
     // Show in main chat AND in group DMs (type 3)
     const ch = getCurrentDMChannel();
-    if (!isMainChat && !ch) return null;
+    if ((!isMainChat && !ch) || fakeDMSettings.store.showOnTopBar) return null;
 
     function handleClick(e: React.MouseEvent) {
         if (btnRect) { setBtnRect(null); } else {
@@ -592,10 +603,10 @@ const FakeDMButton: ChatBarButtonFactory = (props: any) => {
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 export default definePlugin({
     name: "FakeDM",
-    enabledByDefault: true,
     description: "Injects fake local messages into a DM or group DM. Button in the text bar. Persists across restarts.",
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["ChatInputButtonAPI"],
+    settings: fakeDMSettings,
 
     chatBarButton: {
         icon: FakeDMIcon,
@@ -603,10 +614,20 @@ export default definePlugin({
     },
 
     start() {
+        if (fakeDMSettings.store.showOnTopBar) {
+            addHeaderBarButton("FakeDM", () => (
+                <HeaderBarButton
+                    icon={FakeDMIcon}
+                    tooltip="FakeDM"
+                    onClick={() => {}}
+                />
+            ), 5);
+        }
         scheduleRestore();
     },
 
     stop() {
+        removeHeaderBarButton("FakeDM");
         if (_restoreHandler) {
             FluxDispatcher.unsubscribe("CONNECTION_OPEN", _restoreHandler);
             _restoreHandler = null;

@@ -1,4 +1,5 @@
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { EquicordDevs } from "@utils/constants";
@@ -11,6 +12,12 @@ const RTCConnectionStore = findByPropsLazy("getMediaSessionId");
 const StreamerModeStore = findByPropsLazy("hidePersonalInformation");
 
 const settings = definePluginSettings({
+    showOnTopBar: {
+        type: OptionType.BOOLEAN,
+        description: "Show button on the top bar instead of the chat bar",
+        default: false,
+        restartNeeded: true,
+    },
     autoStreamProof: {
         type: OptionType.BOOLEAN,
         description: "Automatically enable StreamProof when you start streaming",
@@ -144,7 +151,7 @@ const StreamProofButton: ChatBarButtonFactory = ({ isMainChat }) => {
     useStateFromStores([StreamerModeStore, StreamStore, RTCConnectionStore], () => isStreaming());
     const [, forceUpdate] = useState({});
 
-    if (!isMainChat) return null;
+    if (!isMainChat || settings.store.showOnTopBar) return null;
 
     function toggle() {
         if (streamProofActive) {
@@ -176,7 +183,6 @@ export default definePlugin({
     description: "Hides messages, links, images, DMs, but not the screen share/voice grid. Toggle via chat bar button.",
     authors: [EquicordDevs.TheArmagan],
     dependencies: ["ChatInputButtonAPI"],
-    enabledByDefault: true,
     settings,
 
     chatBarButton: {
@@ -194,11 +200,21 @@ export default definePlugin({
     },
 
     start() {
+        if (settings.store.showOnTopBar) {
+            addHeaderBarButton("StreamProof", () => (
+                <HeaderBarButton
+                    icon={EyeSlashIcon}
+                    tooltip="StreamProof"
+                    onClick={() => { document.body.classList.toggle("stream-proof-active"); }}
+                />
+            ), 5);
+        }
         if (settings.store.autoStreamProof && isStreaming()) {
             enableStreamProof();
         }
     },
     stop() {
         disableStreamProof();
+        removeHeaderBarButton("StreamProof");
     }
 });

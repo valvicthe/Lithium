@@ -5,6 +5,7 @@
  */
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { findStoreLazy } from "@webpack";
@@ -19,6 +20,12 @@ const UserStore = findStoreLazy("UserStore");
 // ── Settings ───────────────────────────────────────────────────────────────────
 
 const settings = definePluginSettings({
+    showOnTopBar: {
+        type: OptionType.BOOLEAN,
+        description: "Show button on the top bar instead of the chat bar",
+        default: false,
+        restartNeeded: true,
+    },
     active: {
         type: OptionType.BOOLEAN,
         description: "Auto-reply active (toggle in the text bar)",
@@ -202,7 +209,7 @@ function AutoReplyIcon({ active, height = 20, width = 20, className }: {
 const AutoReplyButton: ChatBarButtonFactory = ({ isMainChat }) => {
     const [active, setActive] = useState(settings.store.active);
 
-    if (!isMainChat) return null;
+    if (!isMainChat || settings.store.showOnTopBar) return null;
 
     function toggle() {
         // Session toggle only — does not persist between restarts
@@ -226,7 +233,6 @@ const AutoReplyButton: ChatBarButtonFactory = ({ isMainChat }) => {
 
 export default definePlugin({
     name: "AutoReply",
-    enabledByDefault: true,
     description: "Automatically replies to received messages. Button in the text bar (next to VoiceDictation).",
     authors: [{ name: "User", id: 0n }],
     dependencies: ["ChatInputButtonAPI"],
@@ -255,6 +261,18 @@ export default definePlugin({
     },
 
     start() {
-        // Always OFF at startup — the button toggle is session-only
+        if (settings.store.showOnTopBar) {
+            addHeaderBarButton("AutoReply", () => (
+                <HeaderBarButton
+                    icon={AutoReplyIcon}
+                    tooltip="AutoReply"
+                    onClick={() => { settings.store.active = !settings.store.active; }}
+                />
+            ), 5);
+        }
+    },
+
+    stop() {
+        removeHeaderBarButton("AutoReply");
     },
 });

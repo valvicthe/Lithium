@@ -76,9 +76,8 @@ section[class*="panels_"] > div[class*="container_"]:not(:has([class*="avatar_"]
 
 export default definePlugin({
     name: "UserAreaTweaks",
-    description: "Creates an elegant floating dock for Nightcord plugins using pure CSS, preventing overlap and crashes.",
+    description: "Creates an elegant floating dock for Testcord plugins using pure CSS, preventing overlap and crashes.",
     authors: [{ name: "Nightcord", id: 0n }],
-    enabledByDefault: true,
 
     start() {
         const style = document.createElement("style");

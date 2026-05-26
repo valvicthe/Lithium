@@ -4,11 +4,18 @@ import { UserStore, ChannelStore, RestAPI, FluxDispatcher, React } from "@webpac
 import { DataStore } from "@api/index";
 import { groqChat, getGroqKey } from "../nightcordAI/groqManager";
 import { ChatBarButton } from "@api/ChatButtons";
+import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
 import { findByPropsLazy } from "@webpack";
 
 const MessageStore = findByPropsLazy("getMessages");
 
 const settings = definePluginSettings({
+    showOnTopBar: {
+        type: OptionType.BOOLEAN,
+        description: "Show button on the top bar instead of the chat bar",
+        default: false,
+        restartNeeded: true,
+    },
     warning: {
         type: OptionType.COMPONENT,
         component: () => (
@@ -238,6 +245,7 @@ function forceRerender() {
 }
 
 const AutoResponderButton = () => {
+    if (settings.store.showOnTopBar) return null;
     const [, setTick] = React.useState(0);
     const isEnabled = settings.store.isActive;
 
@@ -284,7 +292,6 @@ export default definePlugin({
     description: "Automatically reply to DMs using AI to match your writing style.",
     authors: [{ name: "Nightcord", id: 0n }],
     settings,
-    enabledByDefault: true,
     chatBarButton: {
         icon: KeyboardIcon,
         render: AutoResponderButton,
@@ -300,9 +307,18 @@ export default definePlugin({
     },
 
     start() {
-        console.log("[AutoResponder] Plugin starting...");
+        if (settings.store.showOnTopBar) {
+            addHeaderBarButton("AutoResponder", () => (
+                <HeaderBarButton
+                    icon={KeyboardIcon}
+                    tooltip="AutoResponder"
+                    onClick={() => { settings.store.isActive = !settings.store.isActive; }}
+                />
+            ), 5);
+        }
     },
 
     stop() {
+        removeHeaderBarButton("AutoResponder");
     }
 });

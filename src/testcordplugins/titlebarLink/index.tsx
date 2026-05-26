@@ -58,8 +58,7 @@ function remove() {
 
 export default definePlugin({
     name: "TitlebarLink",
-    enabledByDefault: true,
-    description: "Click on the central Discord title to open nightcord.online",
+    description: "Click on the central Discord title to open testcord.online",
     authors: [{ name: "Nightcord", id: 0n }],
     required: true,
     patches: [],

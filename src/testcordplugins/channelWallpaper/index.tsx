@@ -49,7 +49,7 @@ const settings = definePluginSettings({
     },
     syncWithFriends: {
         type: OptionType.BOOLEAN,
-        description: "Sync wallpapers with Nightcord friends in DMs.",
+        description: "Sync wallpapers with Testcord friends in DMs.",
         default: true,
         restartNeeded: false,
     },
@@ -415,7 +415,6 @@ const channelContextMenuPatch: NavContextMenuPatchCallback = (children, { channe
 export default definePlugin({
     name: "ChannelWallpaper",
     authors: [Devs.rushii, Devs.Nickyux],
-    enabledByDefault: true,
     description: "Allows for custom backgrounds for every individual channel.",
     settings,
 
