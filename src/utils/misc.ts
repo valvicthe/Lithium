@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { ChannelStore, GuildMemberStore, Toasts } from "@webpack/common";
+import { User } from "@vencord/discord-types";
+import { ChannelStore, GuildMemberStore, IconUtils } from "@webpack/common";
 
 import { EQUICORD_HELPERS, EquicordDevsById, GUILD_ID, SUPPORT_CHANNEL_ID, TESTCORD_GUILD_ID, TestcordDevsById, VencordDevsById } from "./constants";
 import { TestcordAdminsById } from "./testcordAdmins";
@@ -145,5 +146,17 @@ export function removeFromArray<T>(arr: T[], predicate: (e: T) => boolean) {
     if (idx !== -1) arr.splice(idx, 1);
 }
 
+export function getUserAvatarUrl(user: User, guildId?: string, canAnimate?: boolean, size?: number): string {
+    const memberAvatar = guildId ? GuildMemberStore.getMember(guildId, user.id)?.avatar || null : null;
+    if (memberAvatar) {
+        return IconUtils.getGuildMemberAvatarURLSimple({
+            guildId: guildId!,
+            userId: user.id,
+            avatar: memberAvatar,
+            canAnimate,
+            size
+        });
+    }
 
-
+    return IconUtils.getUserAvatarURL(user, canAnimate, size) ?? IconUtils.getDefaultAvatarURL(user.id, user?.discriminator);
+}
