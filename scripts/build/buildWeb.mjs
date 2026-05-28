@@ -54,8 +54,9 @@ const commonOptions = {
         IS_EQUIBOP: false,
         IS_UPDATER_DISABLED: true,
         VERSION,
-        BUILD_TIMESTAMP
-    })
+        BUILD_TIMESTAMP,
+
+    }),
 };
 
 const MonacoWorkerEntryPoints = [
@@ -68,7 +69,7 @@ const buildConfigs = [
     {
         entryPoints: MonacoWorkerEntryPoints.map(entry => `node_modules/monaco-editor/esm/${entry}`),
         bundle: true,
-        minify: true,
+        minify: !process.argv.includes("--watch"),
         format: "iife",
         outbase: "node_modules/monaco-editor/esm/",
         outdir: "dist/browser/vendor/monaco"
@@ -76,7 +77,7 @@ const buildConfigs = [
     {
         entryPoints: ["browser/monaco.ts"],
         bundle: true,
-        minify: true,
+        minify: !process.argv.includes("--watch"),
         format: "iife",
         outfile: "dist/browser/vendor/monaco/index.js",
         loader: {

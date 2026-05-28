@@ -436,6 +436,8 @@ export const commonOpts = {
     logLevel: "info",
     bundle: true,
     minify: !watch && !IS_REPORTER,
+    drop: (!watch && !IS_REPORTER) ? ["debugger"] : undefined,
+    pure: ["console.log", "console.debug", "console.info", "console.trace"],
     sourcemap: watch ? "inline" : "external",
     legalComments: "linked",
     banner,

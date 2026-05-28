@@ -56,12 +56,6 @@ const settings = definePluginSettings({
         default: true
     },
 
-    virtualScrolling: {
-        type: OptionType.BOOLEAN,
-        description: "Enable virtual scrolling for message lists (experimental)",
-        default: true
-    },
-
     memoryMonitoring: {
         type: OptionType.BOOLEAN,
         description: "Monitor memory usage and trigger cleanup automatically",
@@ -82,20 +76,7 @@ export default definePlugin({
 
     // Memory management
     gcInterval: null as any,
-    messageElementsPool: [] as HTMLElement[],
-    renderedMessages: new Map<number, HTMLElement>(),
     optimizationCache: new Map<string, any>(),
-    elementPool: {
-        divs: [] as HTMLElement[],
-        spans: [] as HTMLElement[],
-        containers: [] as HTMLElement[]
-    },
-    virtualScrollState: {
-        visibleRange: { start: 0, end: 0 },
-        totalMessages: 0,
-        containerHeight: 0
-    },
-    intersectionObserver: null as any,
 
     start() {
         console.log("[Hisako's Optimizations] Starting comprehensive performance optimization...");
@@ -104,26 +85,17 @@ export default definePlugin({
         this.optimizeResourceLoading();
         this.setupAnimationOptimization();
         this.setupMemoryManagement();
-        this.setupVirtualScrolling();
-
-        console.log("[Hisako's Optimizations] Optimization suite activated!");
     },
 
     stop() {
         console.log("[Hisako's Optimizations] Restoring original functionality...");
         this.restoreOriginalMethods();
         this.cleanupMemoryManagement();
-        this.cleanupVirtualScrolling();
         if (this.resourceCacheInterval) {
             clearInterval(this.resourceCacheInterval);
             this.resourceCacheInterval = null;
         }
-        if (this.weakRefInterval) {
-            clearInterval(this.weakRefInterval);
-            this.weakRefInterval = null;
-        }
         this.optimizationCache.clear();
-        console.log("[Hisako's Optimizations] Cleanup completed.");
     },
 
     setupDOMOptimizations() {
@@ -146,13 +118,6 @@ export default definePlugin({
             }
         });
 
-        // Optimize requestAnimationFrame for smoother animations
-        if (settings.store.animationReduction > 0) {
-            this.originalMethods.rAF = window.requestAnimationFrame;
-            window.requestAnimationFrame = this.createOptimizedRAF(
-                window.requestAnimationFrame
-            );
-        }
     },
 
     createOptimizedDOMMethod(originalMethod: Function, methodName: string) {
@@ -180,23 +145,6 @@ export default definePlugin({
         };
     },
 
-    createOptimizedRAF(originalRAF: Function) {
-        const reductionFactor = settings.store.animationReduction / 100;
-        let frameCount = 0;
-
-        return function (this: any, callback: FrameRequestCallback) {
-            frameCount++;
-
-            // Skip frames based on reduction setting
-            if (reductionFactor > 0 && frameCount % Math.ceil(1 + reductionFactor * 3) !== 0) {
-                // Still call the callback but with modified timing
-                return setTimeout(() => callback(performance.now()), 16 * (1 + reductionFactor));
-            }
-
-            return originalRAF.call(this as any, callback);
-        };
-    },
-
     optimizeResourceLoading() {
         if (!settings.store.networkOptimization) return;
 
@@ -205,6 +153,7 @@ export default definePlugin({
             const originalFetch = window.fetch;
             const resourceCache = new Map<string, { response: Response; timestamp: number; }>();
             const CACHE_DURATION = 300000; // 5 minutes
+            const MAX_CACHE_ENTRIES = 200;
 
             window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
                 const url = typeof input === "string" ? input : input.toString();
@@ -221,6 +170,10 @@ export default definePlugin({
                     .then(response => {
                         // Cache successful image responses
                         if (response.ok && url.match(/\.(png|jpg|jpeg|gif|webp)/i)) {
+                            if (resourceCache.size >= MAX_CACHE_ENTRIES) {
+                                const oldest = resourceCache.keys().next().value;
+                                if (oldest) resourceCache.delete(oldest);
+                            }
                             resourceCache.set(url, {
                                 response: response.clone(),
                                 timestamp: Date.now()
@@ -291,12 +244,6 @@ export default definePlugin({
                 }, 30000); // Check every 30 seconds
             }
 
-            // Setup weak reference cleanup
-            this.setupWeakReferenceManagement();
-
-            // Setup DOM element pooling
-            this.setupElementPooling();
-
             console.log("[Hisako's Optimizations] Memory management system initialized");
         } catch (e) {
             console.warn("[Hisako's Optimizations] Failed to setup memory management:", e);
@@ -347,13 +294,7 @@ export default definePlugin({
             const win = window as any;
             if (win.gc) {
                 win.gc();
-                console.log("[Hisako's Optimizations] Manual GC triggered");
             }
-
-            // Force microtask checkpoint
-            Promise.resolve().then(() => {
-                // This helps clean up resolved promises
-            });
 
         } catch (e) {
             // GC triggering failed, continue gracefully
@@ -371,108 +312,6 @@ export default definePlugin({
             }
         }
 
-        // Clear unused DOM references
-        if (this.messageElementsPool.length > 100) {
-            this.messageElementsPool.splice(50); // Keep only recent 50 elements
-        }
-    },
-
-    setupWeakReferenceManagement() {
-        // Use WeakMap for automatic cleanup of references
-        const weakRefs = new WeakMap();
-
-        // Periodic cleanup of weak references
-        this.weakRefInterval = setInterval(() => {
-            const dummy = {};
-            weakRefs.set(dummy, Date.now());
-            setTimeout(() => weakRefs.delete(dummy), 1000);
-        }, 60000);
-    },
-
-    setupElementPooling() {
-        // Create pool for frequently used DOM elements
-        this.elementPool = {
-            divs: [],
-            spans: [],
-            containers: []
-        };
-
-        // Pre-populate pools
-        for (let i = 0; i < 10; i++) {
-            this.elementPool.divs.push(document.createElement("div"));
-            this.elementPool.spans.push(document.createElement("span"));
-        }
-    },
-
-    setupVirtualScrolling() {
-        if (!settings.store.virtualScrolling) return;
-
-        try {
-            // Setup intersection observer for efficient rendering
-            this.setupIntersectionObserver();
-            console.log("[Hisako's Optimizations] Virtual scrolling system initialized");
-        } catch (e) {
-            console.warn("[Hisako's Optimizations] Failed to setup virtual scrolling:", e);
-        }
-    },
-
-    setupIntersectionObserver() {
-        if (!("IntersectionObserver" in window)) return;
-
-        this.intersectionObserver = new IntersectionObserver(entries => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    this.renderVisibleMessages();
-                }
-            });
-        }, {
-            rootMargin: "100px",
-            threshold: 0.1
-        });
-    },
-
-    renderVisibleMessages() {
-        // Virtual rendering logic
-        // Only render messages that are actually visible
-        const container = document.querySelector('[class*="messages"]');
-        if (!container) return;
-
-        const viewportHeight = window.innerHeight;
-        const scrollTop = container.scrollTop || 0;
-
-        // Calculate visible message range
-        const messageHeight = 60; // Approximate message height
-        const startIndex = Math.max(0, Math.floor(scrollTop / messageHeight) - 5);
-        const endIndex = Math.min(
-            this.virtualScrollState?.totalMessages || 0,
-            startIndex + Math.ceil(viewportHeight / messageHeight) + 10
-        );
-
-        // Update visible range
-        if (this.virtualScrollState) {
-            this.virtualScrollState.visibleRange = { start: startIndex, end: endIndex };
-        }
-
-        // Render only visible messages
-        this.updateMessageRendering(startIndex, endIndex);
-    },
-
-    updateMessageRendering(startIndex: number, endIndex: number) {
-        // Pool management for message elements
-        const neededElements = endIndex - startIndex;
-
-        // Reuse existing elements from pool
-        while (this.messageElementsPool.length < neededElements) {
-            const element = document.createElement("div");
-            element.className = "virtual-message";
-            this.messageElementsPool.push(element);
-        }
-
-        // Update rendered messages map
-        this.renderedMessages.clear();
-        for (let i = startIndex; i < endIndex; i++) {
-            this.renderedMessages.set(i, this.messageElementsPool[i - startIndex]);
-        }
     },
 
     cleanupMemoryManagement() {
@@ -480,25 +319,6 @@ export default definePlugin({
             clearInterval(this.gcInterval);
             this.gcInterval = null;
         }
-
-        if (this.intersectionObserver) {
-            this.intersectionObserver.disconnect();
-            this.intersectionObserver = null;
-        }
-
-        this.messageElementsPool = [];
-        this.renderedMessages.clear();
-    },
-
-    cleanupVirtualScrolling() {
-        // Cleanup virtual scrolling resources
-        if (this.intersectionObserver) {
-            this.intersectionObserver.disconnect();
-        }
-
-        this.messageElementsPool = [];
-        this.renderedMessages.clear();
-        (this as any).virtualScrollState = null;
     },
 
     cleanupExpiredCache() {

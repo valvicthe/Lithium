@@ -50,11 +50,12 @@ const logger = new Logger("PluginManager", "#a6d189");
 
 export const PMLogger = logger;
 
-function scheduleBatch(tasks: Array<() => void>, yieldMs = 0): Promise<void> {
+function scheduleBatch(tasks: Array<() => void>, yieldMs = 0, chunkSize = 5): Promise<void> {
     return new Promise(resolve => {
         let i = 0;
+        if (tasks.length === 0) { resolve(); return; }
         function next() {
-            const end = Math.min(i + 1, tasks.length);
+            const end = Math.min(i + chunkSize, tasks.length);
             while (i < end) {
                 try { tasks[i](); } catch (e) { logger.error("Scheduled task failed", e); }
                 i++;
@@ -65,8 +66,7 @@ function scheduleBatch(tasks: Array<() => void>, yieldMs = 0): Promise<void> {
                 resolve();
             }
         }
-        if (tasks.length === 0) resolve();
-        else setTimeout(next, yieldMs);
+        setTimeout(next, yieldMs);
     });
 }
 
@@ -474,9 +474,11 @@ export const initPluginManager = onlyOnce(function init() {
         if (p.settings) {
             p.settings.pluginName = p.name;
 
-            for (const [key, def] of Object.entries(p.settings.def)) {
-                if (def.onChange)
-                    SettingsStore.addChangeListener(`plugins.${p.name}.${key}`, def.onChange);
+            if (isPluginEnabled(p.name)) {
+                for (const [key, def] of Object.entries(p.settings.def)) {
+                    if (def.onChange)
+                        SettingsStore.addChangeListener(`plugins.${p.name}.${key}`, def.onChange);
+                }
             }
         }
 

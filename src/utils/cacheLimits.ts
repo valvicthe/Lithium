@@ -1,9 +1,9 @@
-export let DIFF_CACHE_MAX = 500;
-export let TRANSLATION_CACHE_MAX = 200;
-export let ZIP_CACHE_MAX = 50;
-export let CACHED_MESSAGES_MAX = 2000;
-export let TOTALS_MAX = 1000;
-export let CSP_MAX_ENTRIES = 100;
+export let DIFF_CACHE_MAX = 2000;
+export let TRANSLATION_CACHE_MAX = 500;
+export let ZIP_CACHE_MAX = 100;
+export let CACHED_MESSAGES_MAX = 5000;
+export let TOTALS_MAX = 5000;
+export let CSP_MAX_ENTRIES = 500;
 
 export function setCacheLimits(limits: Partial<{
     diff: number;
@@ -22,12 +22,12 @@ export function setCacheLimits(limits: Partial<{
 }
 
 export function resetCacheLimits() {
-    DIFF_CACHE_MAX = 500;
-    TRANSLATION_CACHE_MAX = 200;
-    ZIP_CACHE_MAX = 50;
-    CACHED_MESSAGES_MAX = 2000;
-    TOTALS_MAX = 1000;
-    CSP_MAX_ENTRIES = 100;
+    DIFF_CACHE_MAX = 2000;
+    TRANSLATION_CACHE_MAX = 500;
+    ZIP_CACHE_MAX = 100;
+    CACHED_MESSAGES_MAX = 5000;
+    TOTALS_MAX = 5000;
+    CSP_MAX_ENTRIES = 500;
 }
 
 export function disableCacheLimits() {

@@ -297,7 +297,9 @@ const moduleFactoryHandler: ProxyHandler<MaybePatchedModuleFactory> = {
 
 function proxyFactoryAndUpdateExisting(moduleFactories: AnyWebpackRequire["m"], moduleId: PropertyKey, newFactory: AnyModuleFactory, receiver: any, ignoreExistingInTarget = false) {
     notifyFactoryListeners(moduleId, newFactory);
-    const proxiedFactory = new Proxy(Settings.eagerPatches ? patchFactory(moduleId, newFactory) : newFactory, moduleFactoryHandler);
+    const factory = Settings.eagerPatches ? patchFactory(moduleId, newFactory) : newFactory;
+    if (factory !== newFactory) patchedModuleIds.add(moduleId);
+    const proxiedFactory = new Proxy(factory, moduleFactoryHandler);
 
     if (updateExistingFactory(moduleFactories, moduleId, newFactory, proxiedFactory, ignoreExistingInTarget)) {
         return true;
@@ -379,6 +381,8 @@ function notifyFactoryListeners(moduleId: PropertyKey, factory: AnyModuleFactory
         }
     }
 }
+
+const patchedModuleIds = new Set<PropertyKey>();
 
 /**
  * Run a (possibly) patched module factory with a wrapper which notifies our listeners.
@@ -670,6 +674,10 @@ function patchFactory(moduleId: PropertyKey, originalFactory: AnyModuleFactory):
         if (!patch.all) {
             patches.splice(i--, 1);
         }
+    }
+
+    if (patchedFactory !== originalFactory) {
+        patchedModuleIds.add(moduleId);
     }
 
     patchedFactory[SYM_ORIGINAL_FACTORY] = originalFactory;

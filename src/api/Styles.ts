@@ -51,11 +51,19 @@ vencordRootNode.style.display = "none";
 vencordRootNode.append(coreStyleRootNode, managedStyleRootNode, userStyleRootNode);
 
 export function initStyles() {
-    const osValuesNode = createAndAppendStyle("vencord-os-theme-values", coreStyleRootNode);
-    createAndAppendStyle("vencord-text", coreStyleRootNode).textContent = generateTextCss();
-    const rendererCssNode = createAndAppendStyle("vencord-css-core", coreStyleRootNode);
-    const vesktopCssNode = (IS_VESKTOP || IS_EQUIBOP) ? createAndAppendStyle("vesktop-css-core", coreStyleRootNode) : null;
-    createAndAppendStyle("vencord-margins", coreStyleRootNode).textContent = generateMarginCss();
+    const styles: HTMLStyleElement[] = [];
+    const addStyle = (id: string) => {
+        const s = document.createElement("style");
+        s.id = id;
+        styles.push(s);
+        return s;
+    };
+    const osValuesNode = addStyle("vencord-os-theme-values");
+    addStyle("vencord-text").textContent = generateTextCss();
+    const rendererCssNode = addStyle("vencord-css-core");
+    const vesktopCssNode = (IS_VESKTOP || IS_EQUIBOP) ? addStyle("vesktop-css-core") : null;
+    addStyle("vencord-margins").textContent = generateMarginCss();
+    coreStyleRootNode.replaceChildren(...styles);
 
     VencordNative.native.getRendererCss().then(css => rendererCssNode.textContent = css);
     if (IS_DEV) {

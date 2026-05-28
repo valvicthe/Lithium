@@ -18,13 +18,17 @@
 
 import definePlugin from "@utils/types";
 
+const deferredPattern = /\b(activity|subText|botText|clanTag)\b/;
+
 export default definePlugin({
 	name: "OpenOptimizer",
 	description: "Ports OpenAsar's optimizer code.",
     tags: ["Developers", "Utility"],
 	authors: [{ name: "S€th", id: 1273447359417942128n }],
 	methods: ["removeChild", "appendChild"],
+	timeouts: [] as ReturnType<typeof setTimeout>[],
 	start() {
+		this.timeouts.length = 0;
 		for (const method of this.methods as (keyof Element)[]) {
 			this[`_${method}`] = Element.prototype[method];
 			// @ts-ignore
@@ -32,23 +36,19 @@ export default definePlugin({
 		}
 	},
 	stop() {
+		for (const t of this.timeouts) clearTimeout(t);
+		this.timeouts.length = 0;
 		for (const method of this.methods as (keyof Element)[]) {
 			// @ts-ignore
 			Element.prototype[method] = this[`_${method}`];
 		}
 	},
 
-	// @ts-ignore
-	optimize: (orig) =>
+	optimize: (orig: Function) =>
 		// @ts-ignore
-		function (...args) {
-			if (
-				typeof args[0].className === "string" &&
-				(args[0].className.indexOf("activity") !== -1 ||
-					args[0].className.indexOf("subText") !== -1 ||
-					args[0].className.indexOf("botText") !== -1 ||
-					args[0].className.indexOf("clanTag") !== -1)
-			)
+		function (this: Element, ...args: any[]) {
+			const el = args[0];
+			if (el && typeof el.className === "string" && deferredPattern.test(el.className))
 				// @ts-ignore
 				return setTimeout(() => orig.apply(this, args), 100);
 

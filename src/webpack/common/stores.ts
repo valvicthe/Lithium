@@ -17,9 +17,7 @@
 */
 
 import * as t from "@vencord/discord-types";
-import { findByCodeLazy, findByPropsLazy } from "@webpack";
-
-import { waitForStore } from "./internal";
+import { findByCodeLazy, findByPropsLazy, waitFor } from "@webpack";
 
 export const Flux: t.Flux = findByPropsLazy("connectStores");
 
@@ -93,62 +91,73 @@ export let ApplicationStreamPreviewStore: t.ApplicationStreamPreviewStore;
  */
 export const useStateFromStores: t.useStateFromStores = findByCodeLazy("useStateFromStores");
 
-waitForStore("AccessibilityStore", s => AccessibilityStore = s);
-waitForStore("ApplicationStore", s => ApplicationStore = s);
-waitForStore("AuthenticationStore", s => AuthenticationStore = s);
-waitForStore("DraftStore", s => DraftStore = s);
-waitForStore("UserStore", s => UserStore = s);
-waitForStore("UserProfileStore", m => UserProfileStore = m);
-waitForStore("ChannelStore", m => ChannelStore = m);
-waitForStore("SelectedChannelStore", m => SelectedChannelStore = m);
-waitForStore("SelectedGuildStore", m => SelectedGuildStore = m);
-waitForStore("GuildStore", m => GuildStore = m);
-waitForStore("GuildMemberStore", m => GuildMemberStore = m);
-waitForStore("RelationshipStore", m => RelationshipStore = m);
-waitForStore("MediaEngineStore", m => MediaEngineStore = m);
-waitForStore("NotificationSettingsStore", m => NotificationSettingsStore = m);
-waitForStore("SpellcheckStore", m => SpellCheckStore = m);
-waitForStore("PermissionStore", m => PermissionStore = m);
-waitForStore("PresenceStore", m => PresenceStore = m);
-waitForStore("ReadStateStore", m => ReadStateStore = m);
-waitForStore("GuildChannelStore", m => GuildChannelStore = m);
-waitForStore("GuildRoleStore", m => GuildRoleStore = m);
-waitForStore("GuildScheduledEventStore", m => GuildScheduledEventStore = m);
-waitForStore("GuildMemberCountStore", m => GuildMemberCountStore = m);
-waitForStore("MessageStore", m => MessageStore = m);
-waitForStore("WindowStore", m => WindowStore = m);
-waitForStore("EmojiStore", m => EmojiStore = m);
-waitForStore("StickersStore", m => StickersStore = m);
-waitForStore("TypingStore", m => TypingStore = m);
-waitForStore("VoiceStateStore", m => VoiceStateStore = m);
-waitForStore("StreamerModeStore", m => StreamerModeStore = m);
-waitForStore("SpotifyStore", m => SpotifyStore = m);
-waitForStore("OverridePremiumTypeStore", m => OverridePremiumTypeStore = m);
-waitForStore("UploadAttachmentStore", m => UploadAttachmentStore = m);
-waitForStore("RunningGameStore", m => RunningGameStore = m);
-waitForStore("ActiveJoinedThreadsStore", m => ActiveJoinedThreadsStore = m);
-waitForStore("UserGuildSettingsStore", m => UserGuildSettingsStore = m);
-waitForStore("UserSettingsProtoStore", m => UserSettingsProtoStore = m);
-waitForStore("CallStore", m => CallStore = m);
-waitForStore("ChannelRTCStore", m => ChannelRTCStore = m);
-waitForStore("FriendsStore", m => FriendsStore = m);
-waitForStore("InstantInviteStore", m => InstantInviteStore = m);
-waitForStore("InviteStore", m => InviteStore = m);
-waitForStore("LocaleStore", m => LocaleStore = m);
-waitForStore("RTCConnectionStore", m => RTCConnectionStore = m);
-waitForStore("SoundboardStore", m => SoundboardStore = m);
-waitForStore("PopoutWindowStore", m => PopoutWindowStore = m);
-waitForStore("PendingReplyStore", m => PendingReplyStore = m);
-waitForStore("ApplicationCommandIndexStore", m => ApplicationCommandIndexStore = m);
-waitForStore("EditMessageStore", m => EditMessageStore = m);
-waitForStore("ExperimentStore", m => ExperimentStore = m);
-waitForStore("QuestStore", m => QuestStore = m);
-waitForStore("UserAffinitiesV2Store", m => UserAffinitiesStore = m);
-waitForStore("ApplicationStreamingStore", m => ApplicationStreamingStore = m);
-waitForStore("ApplicationStreamPreviewStore", m => ApplicationStreamPreviewStore = m);
-waitForStore("ThemeStore", m => {
-    ThemeStore = m;
-    // Importing this directly can easily cause circular imports. For this reason, use a non import access here.
-    (Vencord as any).QuickCss?.initQuickCssThemeStore();
-    // for some reason equicord removed quickcss from vencord.ts so i cant do shit abt it - x2b
-});
+const storeAssignments: Record<string, (s: any) => void> = {
+    AccessibilityStore: s => AccessibilityStore = s,
+    ApplicationStore: s => ApplicationStore = s,
+    AuthenticationStore: s => AuthenticationStore = s,
+    DraftStore: s => DraftStore = s,
+    UserStore: s => UserStore = s,
+    UserProfileStore: m => UserProfileStore = m,
+    ChannelStore: m => ChannelStore = m,
+    SelectedChannelStore: m => SelectedChannelStore = m,
+    SelectedGuildStore: m => SelectedGuildStore = m,
+    GuildStore: m => GuildStore = m,
+    GuildMemberStore: m => GuildMemberStore = m,
+    RelationshipStore: m => RelationshipStore = m,
+    MediaEngineStore: m => MediaEngineStore = m,
+    NotificationSettingsStore: m => NotificationSettingsStore = m,
+    SpellcheckStore: m => SpellCheckStore = m,
+    PermissionStore: m => PermissionStore = m,
+    PresenceStore: m => PresenceStore = m,
+    ReadStateStore: m => ReadStateStore = m,
+    GuildChannelStore: m => GuildChannelStore = m,
+    GuildRoleStore: m => GuildRoleStore = m,
+    GuildScheduledEventStore: m => GuildScheduledEventStore = m,
+    GuildMemberCountStore: m => GuildMemberCountStore = m,
+    MessageStore: m => MessageStore = m,
+    WindowStore: m => WindowStore = m,
+    EmojiStore: m => EmojiStore = m,
+    StickersStore: m => StickersStore = m,
+    TypingStore: m => TypingStore = m,
+    VoiceStateStore: m => VoiceStateStore = m,
+    StreamerModeStore: m => StreamerModeStore = m,
+    SpotifyStore: m => SpotifyStore = m,
+    OverridePremiumTypeStore: m => OverridePremiumTypeStore = m,
+    UploadAttachmentStore: m => UploadAttachmentStore = m,
+    RunningGameStore: m => RunningGameStore = m,
+    ActiveJoinedThreadsStore: m => ActiveJoinedThreadsStore = m,
+    UserGuildSettingsStore: m => UserGuildSettingsStore = m,
+    UserSettingsProtoStore: m => UserSettingsProtoStore = m,
+    CallStore: m => CallStore = m,
+    ChannelRTCStore: m => ChannelRTCStore = m,
+    FriendsStore: m => FriendsStore = m,
+    InstantInviteStore: m => InstantInviteStore = m,
+    InviteStore: m => InviteStore = m,
+    LocaleStore: m => LocaleStore = m,
+    RTCConnectionStore: m => RTCConnectionStore = m,
+    SoundboardStore: m => SoundboardStore = m,
+    PopoutWindowStore: m => PopoutWindowStore = m,
+    PendingReplyStore: m => PendingReplyStore = m,
+    ApplicationCommandIndexStore: m => ApplicationCommandIndexStore = m,
+    EditMessageStore: m => EditMessageStore = m,
+    ExperimentStore: m => ExperimentStore = m,
+    QuestStore: m => QuestStore = m,
+    UserAffinitiesV2Store: m => UserAffinitiesStore = m,
+    ApplicationStreamingStore: m => ApplicationStreamingStore = m,
+    ApplicationStreamPreviewStore: m => ApplicationStreamPreviewStore = m,
+};
+
+const storeNames = Object.keys(storeAssignments);
+const unassignedStores = new Set(storeNames);
+
+waitFor(m => {
+    const name = m.constructor?.displayName as string;
+    if (name && unassignedStores.has(name)) {
+        storeAssignments[name](m);
+        unassignedStores.delete(name);
+        if (name === "ThemeStore") {
+            (Vencord as any).QuickCss?.initQuickCssThemeStore();
+        }
+    }
+    return unassignedStores.size === 0;
+}, () => {});

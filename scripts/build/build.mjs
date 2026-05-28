@@ -63,6 +63,8 @@ if (defines.IS_STANDALONE === "false") {
     defines["process.platform"] = JSON.stringify(process.platform);
 }
 
+
+
 /**
  * @type {import("esbuild").BuildOptions}
  */

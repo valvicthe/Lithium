@@ -203,7 +203,6 @@ async function init() {
     startAllPlugins(StartAt.WebpackReady);
 
     syncSettings();
-    initTrayIpc();
 
     if (!IS_DEV && !IS_WEB && !IS_UPDATER_DISABLED) {
         runUpdateCheck();
@@ -226,6 +225,9 @@ async function init() {
                 "\n\n" + pendingPatches.map(p => `${p.plugin}: ${p.find}`).join("\n")
             );
     }
+
+    // Defer non-critical IPC init to not block the critical startup path
+    setTimeout(initTrayIpc, 0);
 }
 
 initPluginManager();

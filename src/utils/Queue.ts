@@ -41,16 +41,14 @@ export class Queue {
     private next() {
         const func = this.queue.shift();
         if (func) {
-            const run = () => Promise.resolve()
-                .then(func)
-                .finally(() => this.next());
-
             if (this.yieldBetween) {
                 this.promise = new Promise<void>(r => setTimeout(() => r(), 0))
-                    .then(() => run())
-                    .finally(() => { });
+                    .then(() => Promise.resolve().then(func))
+                    .finally(() => this.next());
             } else {
-                this.promise = run();
+                this.promise = Promise.resolve()
+                    .then(func)
+                    .finally(() => this.next());
             }
         } else
             this.promise = undefined;
