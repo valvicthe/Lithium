@@ -150,25 +150,31 @@ static class Logic
             var json = wc.DownloadString(RELEASE_API);
             var tm   = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
             if (tm.Success) tag = tm.Groups[1].Value;
-            var am = Regex.Match(json, "\"assets\"\\s*:\\s*\\[([\\s\\S]+?)\\]");
-            if (!am.Success) return null;
+
+            // Scope to the assets section. We deliberately avoid trying to capture the
+            // array body with a bracket regex: an asset's uploader login is
+            // "github-actions[bot]", and the "]" inside it truncates a naive
+            // \[([\s\S]+?)\] capture. Instead, pair each asset "name" with the next
+            // "browser_download_url" (name always precedes the url within an asset).
+            int ai = json.IndexOf("\"assets\"");
+            if (ai < 0) return null;
+            var region = json.Substring(ai);
+
             string asarUrl = null;
-            foreach (Match bm in Regex.Matches(am.Groups[1].Value, "\\{[^{}]+\\}"))
+            foreach (Match m in Regex.Matches(region,
+                "\"name\"\\s*:\\s*\"([^\"]+)\"[\\s\\S]*?\"browser_download_url\"\\s*:\\s*\"([^\"]+)\""))
             {
-                var nm = Regex.Match(bm.Value, "\"name\"\\s*:\\s*\"([^\"]+)\"");
-                if (!nm.Success) continue;
-                var um = Regex.Match(bm.Value, "\"browser_download_url\"\\s*:\\s*\"([^\"]+)\"");
-                if (!um.Success) continue;
-                var assetName = nm.Groups[1].Value;
+                var assetName = m.Groups[1].Value;
+                var dl        = m.Groups[2].Value;
                 if (assetName == ASAR)
                 {
-                    var sm = Regex.Match(bm.Value, "\"size\"\\s*:\\s*(\\d+)");
+                    asarUrl = dl;
+                    var sm = Regex.Match(m.Value, "\"size\"\\s*:\\s*(\\d+)");
                     if (sm.Success) long.TryParse(sm.Groups[1].Value, out size);
-                    asarUrl = um.Groups[1].Value;
                 }
                 else if (assetName == CHECKSUMS)
                 {
-                    checksumUrl = um.Groups[1].Value;
+                    checksumUrl = dl;
                 }
             }
             return asarUrl;
