@@ -71,6 +71,7 @@ export const PluginTags = [
     "MemberList",
     "Utility",
     "Voice",
+    "Nightcord",
     "betterdiscord",
     "bd",
     "loader"

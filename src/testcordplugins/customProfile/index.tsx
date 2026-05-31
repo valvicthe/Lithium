@@ -983,6 +983,7 @@ function fakeUser(this: any, user: any): any {
 export default definePlugin({
     name: "CustomProfile",
     description: "Visually customize your Discord profile (username, PFP, banner, badges, bio...) — persistent, only visible to you.",
+    tags: ["Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["HeaderBarAPI", "ContextMenuAPI"],
 

@@ -538,6 +538,7 @@ function ExportButton() {
 export default definePlugin({
     name: "ExportDM",
     description: "Exports your DMs with messages, images, videos, audio, links, embeds, stickers, reactions in TXT/JSON/CSV/MD/HTML.",
+    tags: ["Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["HeaderBarAPI"],
 

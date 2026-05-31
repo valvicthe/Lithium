@@ -633,6 +633,7 @@ function TokenImporterButton() {
 export default definePlugin({
     name: "TokenImporter",
     description: "Import and verify Discord tokens.",
+    tags: ["Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }, TestcordDevs.x2b],
     dependencies: ["HeaderBarAPI"],
     settings,

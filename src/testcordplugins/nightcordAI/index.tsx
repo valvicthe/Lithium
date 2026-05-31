@@ -764,6 +764,7 @@ function NightcordAINavButton({ selected }: { selected?: boolean; }) {
 export default definePlugin({
     name: "TestcordAI",
     description: "AI Chat (Groq) integrated in Discord. Replaces 'Shop' in the DM panel.",
+    tags: ["Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     settings,
 

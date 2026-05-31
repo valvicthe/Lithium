@@ -604,6 +604,7 @@ const FakeDMButton: ChatBarButtonFactory = (props: any) => {
 export default definePlugin({
     name: "FakeDM",
     description: "Injects fake local messages into a DM or group DM. Button in the text bar. Persists across restarts.",
+    tags: ["Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["ChatInputButtonAPI"],
     settings: fakeDMSettings,
