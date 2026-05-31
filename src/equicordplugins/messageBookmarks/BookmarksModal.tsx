@@ -6,8 +6,9 @@
 
 import { t } from "@utils/esharqI18n";
 import { findByPropsLazy } from "@webpack";
-import { ChannelStore, GuildStore, Modal, React, useEffect, useState } from "@webpack/common";
+import { ChannelStore, GuildStore, Modal, React, showToast, Toasts, useEffect, useState } from "@webpack/common";
 
+import { exportBookmarks, pickBookmarksFile } from "./backup";
 import { getBookmarks, saveBookmarks } from "./store";
 import type { Bookmark, BookmarkCategory } from "./types";
 
@@ -86,6 +87,40 @@ export function BookmarksModal({ modalProps }: { modalProps: any; }) {
         });
     }
 
+    function handleExport() {
+        if (bookmarks.length === 0) {
+            showToast(t("لا توجد إشارات للتصدير", "Nothing to export"), Toasts.Type.MESSAGE);
+            return;
+        }
+        exportBookmarks(bookmarks);
+        showToast(t("✓ تم استخراج النسخة الاحتياطية", "✓ Bookmarks exported"), Toasts.Type.SUCCESS);
+    }
+
+    async function handleImport() {
+        try {
+            const imported = await pickBookmarksFile();
+            if (imported === null) return; // user cancelled the file dialog
+
+            // Merge by messageId — never delete existing bookmarks, never duplicate.
+            const existing = new Set(bookmarks.map(b => b.messageId));
+            const toAdd = imported.filter(b => !existing.has(b.messageId));
+            if (toAdd.length === 0) {
+                showToast(t("لا توجد إشارات جديدة لاستردادها", "No new bookmarks to import"), Toasts.Type.MESSAGE);
+                return;
+            }
+
+            const merged = [...bookmarks, ...toAdd];
+            await saveBookmarks(merged);
+            setBookmarks(merged);
+            showToast(
+                t(`✓ تم استرداد ${toAdd.length} إشارة`, `✓ Imported ${toAdd.length} bookmark${toAdd.length === 1 ? "" : "s"}`),
+                Toasts.Type.SUCCESS
+            );
+        } catch {
+            showToast(t("⚠ ملف غير صالح", "⚠ Invalid backup file"), Toasts.Type.FAILURE);
+        }
+    }
+
     const counts = {
         all: bookmarks.length,
         important: bookmarks.filter(b => b.category === "important").length,
@@ -113,6 +148,23 @@ export function BookmarksModal({ modalProps }: { modalProps: any; }) {
                     {search && (
                         <button className="mb-search-clear" onClick={() => setSearch("")}>×</button>
                     )}
+                </div>
+
+                <div className="mb-toolbar">
+                    <button
+                        className="mb-tool-btn"
+                        title={t("حفظ نسخة احتياطية على جهازك", "Save a backup to your device")}
+                        onClick={handleExport}
+                    >
+                        ⬇ {t("استخراج", "Export")}
+                    </button>
+                    <button
+                        className="mb-tool-btn"
+                        title={t("استرداد الإشارات من ملف نسخة احتياطية", "Restore bookmarks from a backup file")}
+                        onClick={handleImport}
+                    >
+                        ⬆ {t("استرداد", "Import")}
+                    </button>
                 </div>
 
                 <div className="mb-tabs">

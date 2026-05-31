@@ -52,6 +52,32 @@
     color: var(--text-normal);
 }
 
+.mb-toolbar {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.mb-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 7px;
+    border: 1.5px solid var(--background-modifier-accent);
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.mb-tool-btn:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--brand-experiment);
+}
+
 .mb-tabs {
     display: flex;
     gap: 4px;
