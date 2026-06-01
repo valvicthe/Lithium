@@ -37,15 +37,21 @@ export function reAddDeletedMessages(messages: LoggedMessageJSON[], deletedMessa
     const savedIDs: Id[] = [];
 
     for (let i = 0, len = messages.length; i < len; i++) {
-        const { id } = messages[i];
-        IDs.push({ id: id, time: (parseInt(id) / 4194304) + DISCORD_EPOCH });
+        const { id } = messages[i] || {};
+        if (!id) continue;
+        const parsedId = parseInt(id);
+        if (isNaN(parsedId)) continue;
+        IDs.push({ id: id, time: (parsedId / 4194304) + DISCORD_EPOCH });
     }
     for (let i = 0, len = deletedMessages.length; i < len; i++) {
         const record = deletedMessages[i];
-        if (!record) continue;
-        savedIDs.push({ id: record.id, time: (parseInt(record.id) / 4194304) + DISCORD_EPOCH, message: record });
+        if (!record || !record.id) continue;
+        const parsedId = parseInt(record.id);
+        if (isNaN(parsedId)) continue;
+        savedIDs.push({ id: record.id, time: (parsedId / 4194304) + DISCORD_EPOCH, message: record });
     }
 
+    if (!IDs.length) return;
     savedIDs.sort((a, b) => a.time - b.time);
     if (!savedIDs.length) return;
     const { time: lowestTime } = IDs[IDs.length - 1];
@@ -59,7 +65,7 @@ export function reAddDeletedMessages(messages: LoggedMessageJSON[], deletedMessa
     reAddIDs.sort((a, b) => b.time - a.time);
     for (let i = 0, len = reAddIDs.length; i < len; i++) {
         const { id, message } = reAddIDs[i];
-        if (messages.findIndex(e => e.id === id) !== -1) continue;
+        if (messages.findIndex(e => e && e.id === id) !== -1) continue;
         if (!message) continue;
         messages.splice(i, 0, message);
     }
