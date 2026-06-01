@@ -1,18 +1,17 @@
 /*
- * Equicord, a Discord client mod
- * Copyright (c) 2024 Vendicated and contributors
+ * Vencord, a Discord client mod
+ * Copyright (c) 2026 Vendicated and contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
-import { addHeaderBarButton, removeHeaderBarButton, HeaderBarButton } from "@api/HeaderBar";
+import { addHeaderBarButton, HeaderBarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
+import { showApiKeyWarning } from "@utils/apiKeyWarning";
 import definePlugin, { OptionType } from "@utils/types";
 import { React } from "@webpack/common";
-import { groqChat, getGroqKey } from "../nightcordAI/groqManager";
-import { showApiKeyWarning } from "@utils/apiKeyWarning";
 
-// ── Settings ───────────────────────────────────────────────────────────────────
+import { getGroqKey, groqChat } from "../nightcordAI/groqManager";
 
 const settings = definePluginSettings({
     showOnTopBar: {
@@ -50,8 +49,6 @@ const settings = definePluginSettings({
     },
 });
 
-// ── Correction via groqManager ────────────────────────────────────────────────
-
 const LANG_PROMPTS: Record<string, string> = {
     fr: "You are a spell-checker. Fix ONLY spelling and grammar mistakes. Return the corrected text without explanation or quotes. FORBIDDEN: adding words, changing meaning, rephrasing. If already correct, return as-is.",
     en: "You are a spell-checker. Fix ONLY spelling and grammar mistakes. Return the corrected text without explanation or quotes. FORBIDDEN: adding words, changing meaning, rephrasing. If already correct, return as-is.",
@@ -82,38 +79,29 @@ async function correctText(text: string): Promise<string> {
             ],
             temperature: 0,
             maxTokens: 512,
-            // Force a lightweight model for correction — saves the 70B quota for the AI
             forceModel: "llama-3.1-8b-instant",
         });
 
         if (!corrected || corrected.trim() === "" || corrected === text) return text;
 
-        // Safety against infinite repetitions or hallucinations
         if (corrected.toLowerCase().includes("correction:") || corrected.toLowerCase().includes("text:")) return text;
 
-        // Safety: response too different → don't apply
         if (corrected.length > text.length * 1.5 || corrected.length < text.length * 0.4) return text;
 
-        // In low mode: stricter word count check
         if (aggr === "low") {
             const srcWords = text.trim().split(/\s+/).filter(w => w.length > 0).length;
             const corrWords = corrected.trim().split(/\s+/).filter(w => w.length > 0).length;
-            // Soft mode must not add/remove more than one word on short sentences
             if (Math.abs(corrWords - srcWords) > Math.max(1, Math.floor(srcWords * 0.15))) {
                 console.log("[AutoCorrect] Soft mode rejected: word count changed too much", { srcWords, corrWords });
                 return text;
             }
         }
-        return corrected.replace(/^"(.*)"$/, '$1').trim(); // Clean possible quotes
+        return corrected.replace(/^"(.*)"$/, "$1").trim();
     } catch (e: any) {
         console.warn("[AutoCorrect] Error correction:", e.message);
-        return text; // On error, send the original text
+        return text;
     }
 }
-
-
-
-// ── Chat Bar Button ────────────────────────────────────────────────────────────
 
 function AutoCorrectIcon({ enabled }: { enabled: boolean; }) {
     return (
@@ -140,7 +128,6 @@ const AutoCorrectChatBarButton: ChatBarButtonFactory = ({ type }) => {
 
     const toggle = async () => {
         if (!enabled) {
-            // Check that the API key is configured before enabling
             const key = await getGroqKey();
             if (!key) {
                 showApiKeyWarning("AutoCorrect");
@@ -162,8 +149,6 @@ const AutoCorrectChatBarButton: ChatBarButtonFactory = ({ type }) => {
         </ChatBarButton>
     );
 };
-
-// ── Plugin ─────────────────────────────────────────────────────────────────────
 
 export default definePlugin({
     name: "AutoCorrectNC",
@@ -203,4 +188,3 @@ export default definePlugin({
         }
     },
 });
-
