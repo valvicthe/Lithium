@@ -13,6 +13,7 @@ on:
                 options:
                     - main
                     - dev
+                    - translation
                 default: "dev"
 
 env:
@@ -46,15 +47,19 @@ jobs:
                   cache: "pnpm"
 
             - name: Install dependencies
+              if: github.ref_name != 'bun'
               run: pnpm install --frozen-lockfile
 
             - name: Build web
+              if: github.ref_name != 'bun'
               run: pnpm buildWebStandalone
 
             - name: Build
+              if: github.ref_name != 'bun'
               run: pnpm buildStandalone
 
             - name: Generate plugin lists
+              if: github.ref_name != 'bun'
               run: |
                   pnpm generatePluginJson dist/plugins.json
                   pnpm generateEquicordPluginJson dist/equicordplugins.json
@@ -93,8 +98,8 @@ jobs:
 
                   git config --global user.name "GitHub-Actions"
                   git config --global user.email actions@github.com
-                  git clone https://$USERNAME:$GITHUB_TOKEN@github.com/$REPO.git testcord-builds
-                  cd testcord-builds
+                  git clone https://$USERNAME:$GITHUB_TOKEN@github.com/$REPO.git TestCord-builds
+                  cd TestCord-builds
 
                   if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
                       git checkout "$BRANCH"
