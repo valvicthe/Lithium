@@ -28,6 +28,7 @@ import { getEntryPoint, isPluginFile, parseDevs, parseEquicordDevs, parseTestcor
 
     const equicordFlag = args.includes("--equicord");
     const vencordFlag = args.includes("--vencord");
+    const testcordFlag = args.includes("--testcord");
 
     let dirs: string[];
 
@@ -35,6 +36,8 @@ import { getEntryPoint, isPluginFile, parseDevs, parseEquicordDevs, parseTestcor
         dirs = ["src/equicordplugins/_core", "src/equicordplugins"];
     } else if (vencordFlag) {
         dirs = ["src/plugins", "src/plugins/_core"];
+    } else if (testcordFlag) {
+        dirs = ["src/testcordplugins"];
     } else {
         dirs = ["src/plugins", "src/plugins/_core", "src/equicordplugins", "src/equicordplugins/_core", "src/testcordplugins"];
     }

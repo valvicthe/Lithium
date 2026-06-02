@@ -64,6 +64,7 @@ jobs:
                   pnpm generatePluginJson dist/plugins.json
                   pnpm generateEquicordPluginJson dist/equicordplugins.json
                   pnpm generateVencordPluginJson dist/vencordplugins.json
+                  pnpm generateTestcordPluginJson dist/testcordplugins.json
                   pnpm generateDevsList dist/devs.json
 
             - uses: oven-sh/setup-bun@v2
@@ -88,10 +89,11 @@ jobs:
                   bun run generatePluginJson dist/plugins.json
                   bun run generateEquicordPluginJson dist/equicordplugins.json
                   bun run generateVencordPluginJson dist/vencordplugins.json
+                  bun run generateTestcordPluginJson dist/testcordplugins.json
                   bun run generateDevsList dist/devs.json
 
             - name: Upload to Equibuilds repo
-              if: ${{ vars.ACT == 'false' }}
+              if: ${{ vars.ACT != 'true' }}
               run: |
                   BRANCH="${{ github.event.inputs.branch || github.ref_name }}"
                   COMMIT_SHA=$(git rev-parse --short HEAD)
