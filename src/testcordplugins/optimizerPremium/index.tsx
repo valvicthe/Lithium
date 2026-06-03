@@ -314,6 +314,7 @@ export default definePlugin({
     cacheCleanupTimer: null as ReturnType<typeof setInterval> | null,
     memoryTimer: null as ReturnType<typeof setInterval> | null,
     intersectionObserver: null as IntersectionObserver | null,
+    lazyIframeObserver: null as IntersectionObserver | null,
     mediaMutationObserver: null as MutationObserver | null,
     pausedMedia: new WeakSet<HTMLMediaElement>(),
     optimizerStyleEl: null as HTMLStyleElement | null,
@@ -439,6 +440,8 @@ export default definePlugin({
             for (const r of records) {
                 for (const node of r.addedNodes) {
                     if (!(node instanceof HTMLElement)) continue;
+                    if (node instanceof HTMLIFrameElement) continue;
+                    if (node.querySelector?.("iframe")) continue;
                     if (matches(node)) apply(node);
                 }
             }
@@ -989,7 +992,7 @@ export default definePlugin({
     installLazyIframes() {
         if (typeof IntersectionObserver === "undefined") return;
 
-        this.intersectionObserver = this.intersectionObserver || new IntersectionObserver(entries => {
+        this.lazyIframeObserver = new IntersectionObserver(entries => {
             for (const entry of entries) {
                 const { target } = entry;
                 if (!(target instanceof HTMLIFrameElement)) continue;
@@ -1006,12 +1009,13 @@ export default definePlugin({
             if (iframe.dataset.opLazyLoad) return;
             const src = iframe.src || "";
             if (/\.hcaptcha\.com/i.test(src)) return;
+            if (/discord\.com|\.youtube\.com|\.youtu\.be|\.spotify\.com/i.test(src)) return;
             iframe.dataset.opLazyLoad = "pending";
             if (src && !iframe.dataset.src) {
                 iframe.dataset.src = src;
                 iframe.removeAttribute("src");
             }
-            this.intersectionObserver?.observe(iframe);
+            this.lazyIframeObserver?.observe(iframe);
         };
 
         document.querySelectorAll<HTMLIFrameElement>("iframe").forEach(observeIframe);
@@ -1032,6 +1036,10 @@ export default definePlugin({
 
     teardownLazyIframes() {
         this.observerCallbacks.delete("lazyIframes");
+        if (this.lazyIframeObserver) {
+            this.lazyIframeObserver.disconnect();
+            this.lazyIframeObserver = null;
+        }
     },
 
     installImageDecodingOptimization() {
