@@ -307,7 +307,7 @@ function VCSHeaderButton() {
 export default definePlugin({
     name: "VoiceChannelSearch",
     description: "Search and join any voice channel across all your servers.",
-    tags: ["Nightcord"],
+    tags: ["Voice", "Utility", "Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["HeaderBarAPI"],
 

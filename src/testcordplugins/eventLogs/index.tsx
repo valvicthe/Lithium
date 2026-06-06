@@ -797,7 +797,7 @@ function subscribeToEvents() {
 export default definePlugin({
     name: "EventLogs",
     description: "Logs: deleted/edited messages, voice, friends, servers.",
-    tags: ["Nightcord"],
+    tags: ["Notifications", "Utility", "Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["HeaderBarAPI"],
     start() {

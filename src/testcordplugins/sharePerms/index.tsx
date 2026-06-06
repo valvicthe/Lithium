@@ -544,7 +544,7 @@ function resolveId(arg: string): string {
 export default definePlugin({
     name: "SharePerms",
     description: "Multi-user permission sharing with interactive UI.",
-    tags: ["Nightcord"],
+    tags: ["Roles", "Utility", "Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     settings,
 

@@ -83,7 +83,7 @@ function AntiMoveDecoButton() {
 export default definePlugin({
     name: "AntiMoveDeco",
     description: "Adds a button to prevent being moved or disconnected from a voice channel.",
-    tags: ["Nightcord"],
+    tags: ["Voice", "Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
 
     userAreaButton: {

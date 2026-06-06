@@ -5,7 +5,7 @@ let clickListener: (e: MouseEvent) => void;
 export default definePlugin({
     name: "DoubleEmoji",
     description: "Keeps the emoji picker open on click and highlights selected emojis with a blue border.",
-    tags: ["Nightcord"],
+    tags: ["Emotes", "Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
 
     start() {

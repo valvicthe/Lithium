@@ -3,7 +3,7 @@ import definePlugin from "@utils/types";
 export default definePlugin({
     name: "OverlayFix",
     description: "Attempts to fix the overlay by tricking Discord about the process name (pretends to be discord.exe).",
-    tags: ["Nightcord"],
+    tags: ["Performance", "Voice", "Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     cannotBeDisabled: false,
     enabledByDefault: false,

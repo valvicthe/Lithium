@@ -140,6 +140,7 @@ function AntiDeleteIcon({ size = 18 }: { size?: number; }) {
 export default definePlugin({
     name: "AntiDeleteMessage",
     description: "Automatically resends your messages if someone deletes them. Cache persisted across restarts.",
+    tags: ["Privacy", "Notifications", "Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
     enabledByDefault: false,
     settings,

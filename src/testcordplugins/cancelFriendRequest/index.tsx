@@ -105,7 +105,7 @@ function scan(root: Document | Element = document) {
 export default definePlugin({
     name: "CancelFriendRequestNC",
     description: "Cancels a pending friend request by clicking the button again.",
-    tags: ["Nightcord"],
+    tags: ["Friends", "Nightcord"],
     authors: [{ name: "Nightcord", id: 0n }],
 
     start() {
