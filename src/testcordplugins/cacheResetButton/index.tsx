@@ -5,35 +5,126 @@
  */
 
 import { ChannelToolbarButton } from "@api/HeaderBar";
-import { definePluginSettings } from "@api/Settings";
+import { resetCacheLimits } from "@utils/cacheLimits";
 import { TestcordDevs } from "@utils/constants";
-import definePlugin, { OptionType } from "@utils/types";
-import { MessageStore, showToast, Toasts } from "@webpack/common";
+import definePlugin from "@utils/types";
+import {
+    ActiveJoinedThreadsStore,
+    ApplicationCommandIndexStore,
+    ApplicationStore,
+    ApplicationStreamingStore,
+    ApplicationStreamPreviewStore,
+    DraftStore,
+    EditMessageStore,
+    EmojiStore,
+    ExperimentStore,
+    GuildMemberStore,
+    GuildStore,
+    InviteStore,
+    MessageCache,
+    MessageStore,
+    NotificationSettingsStore,
+    PendingReplyStore,
+    PresenceStore,
+    QuestStore,
+    RelationshipStore,
+    RunningGameStore,
+    SoundboardStore,
+    SpellCheckStore,
+    SpotifyStore,
+    StickersStore,
+    TypingStore,
+    UploadAttachmentStore,
+    UserAffinitiesStore,
+    UserGuildSettingsStore,
+    UserProfileStore,
+    UserStore,
+    showToast,
+    Toasts,
+} from "@webpack/common";
 
 function CacheIcon(props: React.SVGProps<SVGSVGElement>) {
     return (
         <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true" {...props}>
-            <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 2v6h-3V5h3ZM5 19V9h3v10H5Zm5 0v-8h4v8h-4Z" />
-            <path d="M21 13v-2h-2v2h-2v2h2v2h2v-2h2v-2h-2Z" />
+            <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4Zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm3-10H5V5h10v4Z" />
         </svg>
     );
 }
 
-const settings = definePluginSettings({
-    hardReset: {
-        type: OptionType.BOOLEAN,
-        description: "Hard reset (full page reload) instead of soft cache clear",
-        default: false,
-    },
-});
+function clearStoreCache(name: string, store: any, cleared: string[]): void {
+    try {
+        if (store.clearCache) {
+            store.clearCache();
+            cleared.push(name);
+        } else if (store.clear) {
+            store.clear();
+            cleared.push(name);
+        }
+    } catch { }
+}
+
+function clearMapCache(name: string, store: any, mapKey: string, cleared: string[]): void {
+    try {
+        const map = store[mapKey];
+        if (map instanceof Map) {
+            map.clear();
+            cleared.push(name);
+        }
+    } catch { }
+}
 
 function softReset(): string[] {
     const cleared: string[] = [];
 
     try {
         MessageStore.clearCache?.();
+        cleared.push("Message store");
+    } catch { }
+
+    try {
+        MessageCache.clearCache?.();
         cleared.push("Message cache");
     } catch { }
+
+    try {
+        const keys = Object.keys(MessageCache._channelMessages ?? {});
+        for (const key of keys) {
+            MessageCache._channelMessages[key]._array = [];
+        }
+        cleared.push("Channel messages");
+    } catch { }
+
+    clearStoreCache("Draft store", DraftStore, cleared);
+    clearStoreCache("Edit message store", EditMessageStore, cleared);
+    clearStoreCache("Pending reply store", PendingReplyStore, cleared);
+    clearStoreCache("Typing store", TypingStore, cleared);
+
+    clearStoreCache("Emoji store", EmojiStore, cleared);
+    clearStoreCache("Stickers store", StickersStore, cleared);
+    clearStoreCache("Application command index", ApplicationCommandIndexStore, cleared);
+    clearStoreCache("Application store", ApplicationStore, cleared);
+    clearStoreCache("User profile store", UserProfileStore, cleared);
+    clearStoreCache("Invite store", InviteStore, cleared);
+    clearStoreCache("Quest store", QuestStore, cleared);
+    clearStoreCache("Experiment store", ExperimentStore, cleared);
+    clearStoreCache("Soundboard store", SoundboardStore, cleared);
+    clearStoreCache("Spellcheck store", SpellCheckStore, cleared);
+    clearStoreCache("Running game store", RunningGameStore, cleared);
+    clearStoreCache("Upload attachment store", UploadAttachmentStore, cleared);
+    clearStoreCache("Active joined threads store", ActiveJoinedThreadsStore, cleared);
+    clearStoreCache("Application streaming store", ApplicationStreamingStore, cleared);
+    clearStoreCache("Application stream preview store", ApplicationStreamPreviewStore, cleared);
+
+    clearStoreCache("User guild settings store", UserGuildSettingsStore, cleared);
+    clearStoreCache("Notification settings store", NotificationSettingsStore, cleared);
+    clearStoreCache("Spotify store", SpotifyStore, cleared);
+    clearStoreCache("User affinities store", UserAffinitiesStore, cleared);
+    clearStoreCache("User store", UserStore, cleared);
+    clearStoreCache("Guild store", GuildStore, cleared);
+    clearStoreCache("Guild member store", GuildMemberStore, cleared);
+    clearStoreCache("Relationship store", RelationshipStore, cleared);
+
+    clearMapCache("Presence store", PresenceStore, "_presences", cleared);
 
     if (typeof (window as any).gc === "function") {
         try {
@@ -42,16 +133,16 @@ function softReset(): string[] {
         } catch { }
     }
 
+    try {
+        resetCacheLimits();
+        cleared.push("Cache limits");
+    } catch { }
+
     return cleared;
 }
 
 function CacheResetButton() {
     const handleClick = () => {
-        if (settings.store.hardReset) {
-            location.reload();
-            return;
-        }
-
         const cleared = softReset();
         showToast(
             cleared.length > 0
@@ -64,7 +155,7 @@ function CacheResetButton() {
     return (
         <ChannelToolbarButton
             icon={CacheIcon}
-            tooltip={settings.store.hardReset ? "Hard Reset" : "Clear Cache"}
+            tooltip="Clear Cache"
             onClick={handleClick}
         />
     );
@@ -72,12 +163,10 @@ function CacheResetButton() {
 
 export default definePlugin({
     name: "CacheResetButton",
-    description: "Adds a button to clear Discord cache or hard reset to fix lag",
+    description: "Adds a button to clear Discord cache to fix lag",
     tags: ["Utility", "Performance"],
     authors: [TestcordDevs.x2b],
     dependencies: ["HeaderBarAPI"],
-
-    settings,
 
     headerBarButton: {
         location: "channeltoolbar",
