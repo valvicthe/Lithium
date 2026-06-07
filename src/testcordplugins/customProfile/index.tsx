@@ -1,19 +1,21 @@
 /*
- * Equicord, a Discord client mod
- * Copyright (c) 2024 Vendicated and contributors
+ * Vencord, a Discord client mod
+ * Copyright (c) 2026 Vendicated and contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
+
+import "./styles.css";
 
 import { ProfileBadge } from "@api/Badges";
 import { addContextMenuPatch, NavContextMenuPatchCallback, removeContextMenuPatch } from "@api/ContextMenu";
 import { addHeaderBarButton, HeaderBarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { DataStore } from "@api/index";
-import { t } from "../autoTranslateNightcord";
 import { ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalRoot, openModal } from "@utils/modal";
 import definePlugin from "@utils/types";
-import { Button, Menu, React, Select, UserStore, IconUtils, FluxDispatcher, AuthenticationStore, SnowflakeUtils, ScrollerThin } from "@webpack/common";
+import { AuthenticationStore, Button, FluxDispatcher, IconUtils, Menu, PresenceStore, React, Select, SnowflakeUtils, Tooltip, UserStore } from "@webpack/common";
 import virtualMerge from "virtual-merge";
-import "./styles.css";
+
+import { t } from "../autoTranslateNightcord";
 
 const DS_KEY = "customProfile_data";
 const DS_ENABLED = "customProfile_enabled";
@@ -62,6 +64,36 @@ const NITRO_LEVELS = [
     { label: t("Opale (72 mois)"), icon: "https://cdn.discordapp.com/badge-icons/5b154df19c53dce2af92c9b61e6be5e2.png" },
 ];
 
+function makeBoostDate(userId: string, boostMonthsIndex: number): Date {
+    const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
+    const totalMonths = BOOST_M[boostMonthsIndex] ?? 1;
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+        hash = ((hash << 5) - hash + userId.charCodeAt(i)) | 0;
+    }
+    const seed = Math.abs(hash);
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth() - totalMonths, 1);
+    const maxDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(((seed % maxDay) + 1));
+    return target;
+}
+
+function makeNitroDate(userId: string, nitroMonthsIndex: number): Date {
+    const NITRO_M = [1, 2, 3, 6, 12, 24, 36, 72];
+    const totalMonths = NITRO_M[nitroMonthsIndex] ?? 1;
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+        hash = ((hash << 5) - hash + userId.charCodeAt(i)) | 0;
+    }
+    const seed = Math.abs(hash) + 7;
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth() - totalMonths, 1);
+    const maxDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(((seed % maxDay) + 1));
+    return target;
+}
+
 const BOOST_LABELS_RAW = [
     "1 Mois", "2 Mois", "3 Mois", "6 Mois",
     "9 Mois", "12 Mois", "15 Mois", "18 Mois", "24 Mois"
@@ -69,15 +101,15 @@ const BOOST_LABELS_RAW = [
 const BOOST_LABELS = BOOST_LABELS_RAW.map(l => t(l));
 const BOOST_MONTHS = [1, 2, 3, 6, 9, 12, 15, 18, 24];
 const BOOST_ICONS = [
-    "https://cdn.discordapp.com/badge-icons/51040c70d4f20a921ad6674ff86fc95c.png",   // 1 mois
-    "https://cdn.discordapp.com/badge-icons/0e4080d1d333bc7ad29ef6528b6f2fb7.png",   // 2 mois
-    "https://cdn.discordapp.com/badge-icons/72bed924410c304dbe3d00a6e593ff59.png",   // 3 mois
-    "https://cdn.discordapp.com/badge-icons/df199d2050d3ed4ebf84d64ae83989f8.png",   // 6 mois
-    "https://cdn.discordapp.com/badge-icons/996b3e870e8a22ce519b3a50e6bdd52f.png",   // 9 mois
-    "https://cdn.discordapp.com/badge-icons/991c9f39ee33d7537d9f408c3e53141e.png",   // 12 mois
-    "https://cdn.discordapp.com/badge-icons/cb3ae83c15e970e8f3d410bc62cb8b99.png",   // 15 mois
-    "https://cdn.discordapp.com/badge-icons/7142225d31238f6387d9f09efaa02759.png",   // 18 mois
-    "https://cdn.discordapp.com/badge-icons/ec92202290b48d0879b7413d2dde3bab.png",   // 24 mois
+    "https://cdn.discordapp.com/badge-icons/51040c70d4f20a921ad6674ff86fc95c.png", // 1 mois
+    "https://cdn.discordapp.com/badge-icons/0e4080d1d333bc7ad29ef6528b6f2fb7.png", // 2 mois
+    "https://cdn.discordapp.com/badge-icons/72bed924410c304dbe3d00a6e593ff59.png", // 3 mois
+    "https://cdn.discordapp.com/badge-icons/df199d2050d3ed4ebf84d64ae83989f8.png", // 6 mois
+    "https://cdn.discordapp.com/badge-icons/996b3e870e8a22ce519b3a50e6bdd52f.png", // 9 mois
+    "https://cdn.discordapp.com/badge-icons/991c9f39ee33d7537d9f408c3e53141e.png", // 12 mois
+    "https://cdn.discordapp.com/badge-icons/cb3ae83c15e970e8f3d410bc62cb8b99.png", // 15 mois
+    "https://cdn.discordapp.com/badge-icons/7142225d31238f6387d9f09efaa02759.png", // 18 mois
+    "https://cdn.discordapp.com/badge-icons/ec92202290b48d0879b7413d2dde3bab.png", // 24 mois
 ];
 
 const AVATAR_DECORATIONS = [
@@ -105,6 +137,8 @@ const AVATAR_DECORATIONS = [
     { id: "1427463138634109026", label: "Autumn" },
     { id: "1341506443865489408", label: "Darkness" },
 ];
+
+const NITRO_TIER_NAMES_EN = ["", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Emerald", "Ruby", "Opal"];
 
 function getDecorationUrl(assetId: string, animated = false): string {
     return `https://cdn.discordapp.com/media/v1/collectibles-shop/${assetId}/${animated ? "animated" : "static"}`;
@@ -150,6 +184,75 @@ let _trueOriginalUser: any = null;
 let _dataVersion: number = 0;
 let allAccountsData: Record<string, CustomProfileData> = {};
 let allAccountsEnabled: Record<string, boolean> = {};
+
+let originalGetStatus: typeof PresenceStore.getStatus | null = null;
+let originalGetClientStatus: typeof PresenceStore.getClientStatus | null = null;
+let originalGetActivities: typeof PresenceStore.getActivities | null = null;
+let originalGetPrimaryActivity: typeof PresenceStore.getPrimaryActivity | null = null;
+let originalGetUnfilteredActivities: typeof PresenceStore.getUnfilteredActivities | null = null;
+let originalFindActivity: typeof PresenceStore.findActivity | null = null;
+let originalGetApplicationActivity: typeof PresenceStore.getApplicationActivity | null = null;
+let presencePatched = false;
+
+function patchPresence() {
+    if (presencePatched) return;
+    presencePatched = true;
+
+    originalGetStatus = PresenceStore.getStatus;
+    originalGetClientStatus = PresenceStore.getClientStatus;
+    originalGetActivities = PresenceStore.getActivities;
+    originalGetPrimaryActivity = PresenceStore.getPrimaryActivity;
+    originalGetUnfilteredActivities = PresenceStore.getUnfilteredActivities;
+    originalFindActivity = PresenceStore.findActivity;
+    originalGetApplicationActivity = PresenceStore.getApplicationActivity;
+
+    PresenceStore.getStatus = function (userId: string, guildId?: string | null, defaultStatus?: any): any {
+        if (isEnabled && isMe(userId)) return undefined as any;
+        return originalGetStatus!.call(this, userId, guildId, defaultStatus);
+    };
+
+    PresenceStore.getClientStatus = function (userId: string): any {
+        if (isEnabled && isMe(userId)) return undefined as any;
+        return originalGetClientStatus!.call(this, userId);
+    };
+
+    PresenceStore.getActivities = function (userId: string, guildId?: string): any {
+        if (isEnabled && isMe(userId)) return [] as any;
+        return originalGetActivities!.call(this, userId, guildId);
+    };
+
+    PresenceStore.getPrimaryActivity = function (userId: string, guildId?: string): any {
+        if (isEnabled && isMe(userId)) return undefined as any;
+        return originalGetPrimaryActivity!.call(this, userId, guildId);
+    };
+
+    PresenceStore.getUnfilteredActivities = function (userId: string, guildId?: string): any {
+        if (isEnabled && isMe(userId)) return [] as any;
+        return originalGetUnfilteredActivities!.call(this, userId, guildId);
+    };
+
+    PresenceStore.findActivity = function (userId: string, predicate: any, guildId?: string): any {
+        if (isEnabled && isMe(userId)) return undefined as any;
+        return originalFindActivity!.call(this, userId, predicate, guildId);
+    };
+
+    PresenceStore.getApplicationActivity = function (userId: string, applicationId: string, guildId?: string): any {
+        if (isEnabled && isMe(userId)) return undefined as any;
+        return originalGetApplicationActivity!.call(this, userId, applicationId, guildId);
+    };
+}
+
+function unpatchPresence() {
+    if (!presencePatched) return;
+    if (originalGetStatus) PresenceStore.getStatus = originalGetStatus;
+    if (originalGetClientStatus) PresenceStore.getClientStatus = originalGetClientStatus;
+    if (originalGetActivities) PresenceStore.getActivities = originalGetActivities;
+    if (originalGetPrimaryActivity) PresenceStore.getPrimaryActivity = originalGetPrimaryActivity;
+    if (originalGetUnfilteredActivities) PresenceStore.getUnfilteredActivities = originalGetUnfilteredActivities;
+    if (originalFindActivity) PresenceStore.findActivity = originalFindActivity;
+    if (originalGetApplicationActivity) PresenceStore.getApplicationActivity = originalGetApplicationActivity;
+    presencePatched = false;
+}
 
 function saveDataSync(data: CustomProfileData, enabled: boolean) {
     try {
@@ -337,13 +440,14 @@ async function copyUserProfile(userId: string) {
             const premiumSince = profile.premiumSince ?? user.premiumSince ?? null;
             if (premiumSince) {
                 const months = Math.floor((Date.now() - new Date(premiumSince).getTime()) / (1000 * 60 * 60 * 24 * 30));
-                if (months >= 72) newData.nitroLevel = 7;
-                else if (months >= 36) newData.nitroLevel = 6;
-                else if (months >= 24) newData.nitroLevel = 5;
-                else if (months >= 12) newData.nitroLevel = 4;
-                else if (months >= 6) newData.nitroLevel = 3;
-                else if (months >= 3) newData.nitroLevel = 2;
-                else if (months >= 2) newData.nitroLevel = 1;
+                if (months >= 72) newData.nitroLevel = 8;
+                else if (months >= 36) newData.nitroLevel = 7;
+                else if (months >= 24) newData.nitroLevel = 6;
+                else if (months >= 12) newData.nitroLevel = 5;
+                else if (months >= 6) newData.nitroLevel = 4;
+                else if (months >= 3) newData.nitroLevel = 3;
+                else if (months >= 2) newData.nitroLevel = 2;
+                else if (months >= 1) newData.nitroLevel = 1;
                 else newData.nitroLevel = 0;
             } else {
                 newData.nitroLevel = 0;
@@ -573,8 +677,6 @@ function isMe(userId: string | null | undefined): boolean {
     return false;
 }
 
-
-
 function EditIcon({ size = 18 }: { size?: number; }) {
     return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" /></svg>;
 }
@@ -589,6 +691,51 @@ function TrashIcon() {
 }
 function SaveIcon() {
     return <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4Zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm3-10H5V5h10v4Z" /></svg>;
+}
+
+// Rich tooltip matching Discord's native Nitro badge popup (Image 1 style)
+function NitroBadgeTooltip({ icon, tierName, dateStr }: { icon: string; tierName: string; dateStr: string; }) {
+    const title = tierName ? `NITRO ${tierName.toUpperCase()}` : "NITRO";
+    return (
+        <Tooltip
+            text={
+                <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    padding: "8px 12px",
+                    gap: 2,
+                }}>
+                    <img
+                        src={icon}
+                        alt=""
+                        style={{ width: 60, height: 60, objectFit: "contain", marginBottom: 4 }}
+                    />
+                    <div style={{
+                        fontWeight: 700,
+                        fontSize: 14,
+                        letterSpacing: "0.06em",
+                        lineHeight: 1.2,
+                    }}>
+                        {title}
+                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.8 }}>
+                        Subscriber since {dateStr}
+                    </div>
+                </div>
+            }
+        >
+            {(tooltipProps: any) => (
+                <img
+                    {...tooltipProps}
+                    src={icon}
+                    alt={title}
+                    style={{ borderRadius: "50%", width: "22px", height: "22px" }}
+                />
+            )}
+        </Tooltip>
+    );
 }
 
 function SectionLabel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties; }) {
@@ -676,7 +823,7 @@ function BadgePicker({ selected, onChange, nitroType, onNitroType, boostLevel, o
                 {NITRO_LEVELS.map((n, i) => (
                     <BadgeBtn key={i} label={n.label} icon={n.icon} active={nitroType === i} onClick={() => {
                         onNitroType(i);
-                        // Reset boost when selecting nitro type manually if desired, 
+                        // Reset boost when selecting nitro type manually if desired,
                         // but usually these are separate.
                     }} />
                 ))}
@@ -738,14 +885,6 @@ function forceAccountPanelRerender() {
         else stopDomObserver();
     } catch { }
 }
-
-
-
-
-
-
-
-
 
 function CustomProfileModal({ rootProps }: { rootProps: any; }) {
     const myId = AuthenticationStore?.getId?.() || "";
@@ -1103,11 +1242,11 @@ export default definePlugin({
 
         // Copy properties except username/globalName/displayName
         for (const key of Reflect.ownKeys(realUser)) {
-            if (key === 'username' || key === 'globalName' || key === 'displayName' || key === '__cp_isClone') continue;
+            if (key === "username" || key === "globalName" || key === "displayName" || key === "__cp_isClone") continue;
             const desc = Object.getOwnPropertyDescriptor(realUser, key);
             if (desc) Object.defineProperty(clone, key, desc);
         }
-        Object.defineProperty(clone, '__cp_isClone', { value: true, enumerable: false, configurable: true });
+        Object.defineProperty(clone, "__cp_isClone", { value: true, enumerable: false, configurable: true });
         // Store real values on clone for next cycles
         clone._realUsername = realUsername;
         clone._realGlobalName = realGlobalName;
@@ -1177,17 +1316,11 @@ export default definePlugin({
 
         if (isEnabled && storedData.nitro) {
             clone.premiumType = 2;
-            const LEVEL_MONTHS = [1, 2, 3, 6, 12, 24, 36, 72];
-            const since = new Date();
-            since.setMonth(since.getMonth() - (LEVEL_MONTHS[storedData.nitroLevel!] ?? 1));
-            clone.premiumSince = since;
+            clone.premiumSince = makeNitroDate(realUser.id, storedData.nitroLevel ?? 0);
 
             const bm = storedData.boostMonths ?? -1;
             if (bm >= 0) {
-                const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
-                const boostSince = new Date();
-                boostSince.setMonth(boostSince.getMonth() - (BOOST_M[bm] ?? 1));
-                clone.premiumGuildSince = boostSince;
+                clone.premiumGuildSince = makeBoostDate(realUser.id, bm);
             } else {
                 clone.premiumGuildSince = null;
             }
@@ -1251,17 +1384,11 @@ export default definePlugin({
                         merged.themeColors = [storedData.accentColor, c2];
                     }
                     const nl = storedData.nitroLevel ?? 0;
-                    const LEVEL_MONTHS = [1, 2, 3, 6, 12, 24, 36, 72];
-                    const since = new Date();
-                    since.setMonth(since.getMonth() - (LEVEL_MONTHS[nl] ?? 1));
-                    merged.premiumSince = since;
+                    merged.premiumSince = makeNitroDate(profile.userId, nl);
 
                     const bm = storedData.boostMonths ?? -1;
                     if (bm >= 0) {
-                        const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
-                        const boostSince = new Date();
-                        boostSince.setMonth(boostSince.getMonth() - (BOOST_M[bm] ?? 1));
-                        merged.premiumGuildSince = boostSince;
+                        merged.premiumGuildSince = makeBoostDate(profile.userId, bm);
                     } else {
                         merged.premiumGuildSince = null;
                     }
@@ -1311,7 +1438,6 @@ export default definePlugin({
         return "***-***-" + fake.slice(-4);
     },
 
-
     patchBannerUrl({ displayProfile }: any) {
         if (!isEnabled || !storedData.nitro || !storedData.banner) return null;
         try { return isMe(displayProfile?.userId) ? storedData.banner : null; } catch { return null; }
@@ -1327,6 +1453,7 @@ export default definePlugin({
 
     async start() {
         applyAvatarPatchEarly();
+        patchPresence();
         addHeaderBarButton("custom-profile-btn", () => <CustomProfileButton />, 10);
         addContextMenuPatch("user-context", userContextMenuPatch);
 
@@ -1562,9 +1689,28 @@ export default definePlugin({
                     badgeList.push({ description: t("Owner of a partner server"), iconSrc: "https://cdn.discordapp.com/badge-icons/3f9748e53446a137a052f3454e2de41e.png", position: 0, props: { style } });
                 }
 
-                // 3. NITRO (Image 2 shows it here)
+                // 3. NITRO — rich tooltip with correct tier name and calculated date
                 if (hasNitroFake) {
-                    badgeList.push({ description: `NITRO\nSubscribed since 10/22/21`, iconSrc: NITRO_LEVELS[nl].icon, position: 0, props: { style, title: "Nitro" } });
+                    const since = makeNitroDate(UserStore.getCurrentUser()?.id ?? "", nl);
+                    const dateStr = `${since.getMonth() + 1}/${since.getDate()}/${String(since.getFullYear()).slice(-2)}`;
+                    const tierName = NITRO_TIER_NAMES_EN[nl] ?? "";
+                    const tooltipTitle = tierName ? `Nitro ${tierName}` : "Nitro";
+                    const { icon } = NITRO_LEVELS[nl];
+                    badgeList.push({
+                        description: `${tooltipTitle}\nSubscriber since ${dateStr}`,
+                        image: icon,
+                        iconSrc: icon,
+                        position: 0,
+                        key: "cp-nitro-badge",
+                        props: { style },
+                        component: () => (
+                            <NitroBadgeTooltip
+                                icon={icon}
+                                tierName={tierName}
+                                dateStr={dateStr}
+                            />
+                        ),
+                    });
                 }
 
                 // 4. HypeSquad Events
@@ -1608,9 +1754,11 @@ export default definePlugin({
                     badgeList.push({ description: t("Early Supporter"), iconSrc: "https://cdn.discordapp.com/badge-icons/7060786766c9c840eb3019e725d2b358.png", position: 0, props: { style } });
                 }
 
-                // 11. SERVER BOOST (Right after Early Supporter on image 2)
+                // 11. SERVER BOOST (Right after Early Supporter)
                 if (hasBoostFake) {
-                    badgeList.push({ description: `Server Booster — ${BOOST_LABELS[bm]}`, iconSrc: BOOST_ICONS[bm], position: 0, props: { style, title: `Server Booster — ${BOOST_LABELS[bm]}` } });
+                    const boostSince = makeBoostDate(UserStore.getCurrentUser()?.id ?? "", bm);
+                    const boostDateStr = `${boostSince.getMonth() + 1}/${boostSince.getDate()}/${String(boostSince.getFullYear()).slice(-2)}`;
+                    badgeList.push({ description: `Server Booster\nServer boosting since ${boostDateStr}`, iconSrc: BOOST_ICONS[bm], position: 0, props: { style, title: "Server Booster" } });
                 }
 
                 // 12. Active Developer
@@ -1641,6 +1789,7 @@ export default definePlugin({
     ] as ProfileBadge[],
 
     stop() {
+        unpatchPresence();
         removeHeaderBarButton("custom-profile-btn");
         removeContextMenuPatch("user-context", userContextMenuPatch);
         FluxDispatcher.unsubscribe("CONNECTION_OPEN", onAccountSwitch);
