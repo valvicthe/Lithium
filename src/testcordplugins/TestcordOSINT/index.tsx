@@ -42,6 +42,11 @@ const settings = definePluginSettings({
         description: "Scan messages across all mutual servers (slower but comprehensive)",
         default: false,
     },
+    scanDMs: {
+        type: OptionType.BOOLEAN,
+        description: "Also scan DM conversations with the target user",
+        default: false,
+    },
     messageLimit: {
         type: OptionType.SLIDER,
         description: "Max messages per channel (ignored when unlimited is on)",
@@ -147,6 +152,21 @@ function canAccessChannel(channelId: string): boolean {
     if (!channel.guild_id) return true;
     return PermissionStore.can(PermissionsBits.VIEW_CHANNEL, channel)
         && PermissionStore.can(PermissionsBits.READ_MESSAGE_HISTORY, channel);
+}
+
+function getDMChannelsWithUser(userId: string): string[] {
+    const dmChannelIds: string[] = [];
+    const privateChannels = ChannelStore.getMutablePrivateChannels();
+
+    for (const [id, channel] of Object.entries(privateChannels)) {
+        if (channel.type !== 1) continue;
+        const recipients = (channel as any).recipients;
+        if (Array.isArray(recipients) && recipients.includes(userId)) {
+            dmChannelIds.push(id);
+        }
+    }
+
+    return dmChannelIds;
 }
 
 // ── Fetch helpers ──
@@ -472,6 +492,7 @@ function AttachmentsModal({ modalProps, messages }: { modalProps: any; messages:
 function OSINTScanPanel({ userId, channelId, modalProps }: { userId: string; channelId: string; modalProps: any; }) {
     const unlimited = settings.store.unlimitedMessages;
     const scanMutual = settings.store.scanMutualServers;
+    const scanDMs = settings.store.scanDMs;
     const limit = settings.store.messageLimit;
 
     const [phase, setPhase] = useState<"fetching" | "analyzing" | "done" | "error">("fetching");
@@ -557,6 +578,20 @@ function OSINTScanPanel({ userId, channelId, modalProps }: { userId: string; cha
                 await searchGuild(guildId ?? null, chan?.name || channelId, channelId);
             }
 
+            if (scanDMs && !cancelled && state.running) {
+                const dmChannels = getDMChannelsWithUser(userId);
+                for (const dmId of dmChannels) {
+                    if (cancelled || !state.running) break;
+                    const dmChannel = ChannelStore.getChannel(dmId);
+                    setCurrentGuildName(`DM: ${dmChannel?.name || dmId}`);
+                    setProgress(`Searching DMs...`);
+                    try {
+                        await searchGuild(null, "DM", dmId);
+                    } catch {}
+                    if (acc.length > 0) runAnalysis([...acc]);
+                }
+            }
+
             if (!cancelled) {
                 runAnalysis([...acc]);
                 setPhase("analyzing");
@@ -600,7 +635,7 @@ function OSINTScanPanel({ userId, channelId, modalProps }: { userId: string; cha
 
         loop();
         return () => { cancelled = true; state.running = false; state.aborted = true; };
-    }, [userId, channelId, unlimited, scanMutual, limit, runAnalysis]);
+    }, [userId, channelId, unlimited, scanMutual, scanDMs, limit, runAnalysis]);
 
     function handleStop() {
         fetchStateRef.current.running = false;
@@ -868,6 +903,7 @@ function OSINTMultiScan({ modalProps }: { modalProps: any; }) {
         const guildId = chan?.guild_id;
         const unlimited = settings.store.unlimitedMessages;
         const limit = settings.store.messageLimit;
+        const scanDMs = settings.store.scanDMs;
 
         for (let i = 0; i < targets.length; i++) {
             if (abortRef.current) break;
@@ -875,21 +911,37 @@ function OSINTMultiScan({ modalProps }: { modalProps: any; }) {
             setTargets(prev => prev.map((t, idx) => idx === i ? { ...t, status: "scanning" } : t));
 
             try {
-                if (!guildId) throw new Error("Not in a guild");
-                if (!canAccessChannel(channelId)) throw new Error("No access");
-
                 const acc: MessageData[] = [];
                 let offset = 0;
                 let running = true;
 
-                while (running) {
-                    const { messages, total } = await searchMessages(targets[i].userId, guildId, channelId, offset);
-                    if (messages.length === 0) break;
-                    acc.push(...messages.map(toMessageData));
-                    offset += messages.length;
-                    if (!unlimited && acc.length >= limit) break;
-                    if (offset >= total) break;
-                    await new Promise(r => setTimeout(r, 250));
+                if (guildId) {
+                    while (running) {
+                        const { messages, total } = await searchMessages(targets[i].userId, guildId, channelId, offset);
+                        if (messages.length === 0) break;
+                        acc.push(...messages.map(toMessageData));
+                        offset += messages.length;
+                        if (!unlimited && acc.length >= limit) break;
+                        if (offset >= total) break;
+                        await new Promise(r => setTimeout(r, 250));
+                    }
+                }
+
+                if (scanDMs) {
+                    const dmChannels = getDMChannelsWithUser(targets[i].userId);
+                    for (const dmId of dmChannels) {
+                        if (abortRef.current) break;
+                        let dmOffset = 0;
+                        while (running) {
+                            const { messages, total } = await searchMessages(targets[i].userId, null, dmId, dmOffset);
+                            if (messages.length === 0) break;
+                            acc.push(...messages.map(toMessageData));
+                            dmOffset += messages.length;
+                            if (!unlimited && acc.length >= limit) break;
+                            if (dmOffset >= total) break;
+                            await new Promise(r => setTimeout(r, 250));
+                        }
+                    }
                 }
 
                 const result = analyzeMessages(acc, settings.store.use24hTime);
