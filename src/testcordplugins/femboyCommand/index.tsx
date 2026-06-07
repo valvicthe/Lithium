@@ -19,13 +19,8 @@ interface ApiSource {
 
 const API_LIST: ApiSource[] = [
     {
-        name: "PurrBot",
-        endpoint: CORS_PROXY + encodeURIComponent("https://api.purrbot.site/v2/img/nsfw/yuri/gif"),
-        parse: data => (data && data.error === false && typeof data.link === "string") ? data.link : null
-    },
-    {
         name: "Danbooru",
-        endpoint: CORS_PROXY + encodeURIComponent("https://danbooru.donmai.us/posts.json?tags=yuri+solo+rating%3Ageneral&limit=20"),
+        endpoint: CORS_PROXY + encodeURIComponent("https://danbooru.donmai.us/posts.json?tags=trap+solo+rating%3Ageneral&limit=20"),
         parse: data => {
             if (!Array.isArray(data) || data.length === 0) return null;
             const post = data[Math.floor(Math.random() * data.length)];
@@ -34,7 +29,7 @@ const API_LIST: ApiSource[] = [
     },
     {
         name: "Safebooru",
-        endpoint: CORS_PROXY + encodeURIComponent("https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&limit=20&tags=yuri+solo"),
+        endpoint: CORS_PROXY + encodeURIComponent("https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&limit=20&tags=trap+solo"),
         parse: data => {
             if (!Array.isArray(data) || data.length === 0) return null;
             const post = data[Math.floor(Math.random() * data.length)];
@@ -43,7 +38,7 @@ const API_LIST: ApiSource[] = [
     },
     {
         name: "XBooru",
-        endpoint: CORS_PROXY + encodeURIComponent("https://xbooru.com/index.php?page=dapi&s=post&q=index&tags=yuri+solo&limit=20&json=1"),
+        endpoint: CORS_PROXY + encodeURIComponent("https://xbooru.com/index.php?page=dapi&s=post&q=index&tags=trap+solo&limit=20&json=1"),
         parse: data => {
             if (!Array.isArray(data) || data.length === 0) return null;
             const post = data[Math.floor(Math.random() * data.length)];
@@ -52,12 +47,35 @@ const API_LIST: ApiSource[] = [
     },
     {
         name: "TBIB",
-        endpoint: CORS_PROXY + encodeURIComponent("https://tbib.org/index.php?page=dapi&s=post&q=index&tags=yuri+solo&limit=20&json=1"),
+        endpoint: CORS_PROXY + encodeURIComponent("https://tbib.org/index.php?page=dapi&s=post&q=index&tags=trap+solo&limit=20&json=1"),
         parse: data => {
             if (!Array.isArray(data) || data.length === 0) return null;
             const post = data[Math.floor(Math.random() * data.length)];
             return post?.file_url ?? post?.sample_url ?? null;
         }
+    },
+    {
+        name: "Konachan",
+        endpoint: CORS_PROXY + encodeURIComponent("https://konachan.com/post.json?tags=trap&limit=20"),
+        parse: data => {
+            if (!Array.isArray(data) || data.length === 0) return null;
+            const post = data[Math.floor(Math.random() * data.length)];
+            return post?.file_url ?? post?.sample_url ?? null;
+        }
+    },
+    {
+        name: "Yande.re",
+        endpoint: CORS_PROXY + encodeURIComponent("https://yande.re/post.json?tags=trap&limit=20"),
+        parse: data => {
+            if (!Array.isArray(data) || data.length === 0) return null;
+            const post = data[Math.floor(Math.random() * data.length)];
+            return post?.file_url ?? post?.sample_url ?? null;
+        }
+    },
+    {
+        name: "FemboyFinder",
+        endpoint: CORS_PROXY + encodeURIComponent("https://femboyfinder.firestreaker2.gq/api/femboy"),
+        parse: data => (data && data.error === false && typeof data.url === "string") ? data.url : null
     }
 ];
 
@@ -70,35 +88,35 @@ function shuffle<T>(arr: T[]): T[] {
     return a;
 }
 
-async function fetchYuri(): Promise<{ url: string; source: string; } | null> {
+async function fetchFemboy(): Promise<{ url: string; source: string; } | null> {
     for (const api of shuffle(API_LIST)) {
         try {
             const res = await fetch(api.endpoint, {
                 headers: { Accept: "application/json" }
             });
             if (!res.ok) {
-                console.warn(`[Yuri] ${api.name} returned HTTP ${res.status}`);
+                console.warn(`[FemboyCommand] ${api.name} returned HTTP ${res.status}`);
                 continue;
             }
             const data = await res.json();
             const url = api.parse(data);
             if (url) return { url, source: api.name };
-            console.warn(`[Yuri] ${api.name} returned no usable URL`);
+            console.warn(`[FemboyCommand] ${api.name} returned no usable URL`);
         } catch (e) {
-            console.error(`[Yuri] ${api.name} failed:`, e);
+            console.error(`[FemboyCommand] ${api.name} failed:`, e);
         }
     }
     return null;
 }
 
 export default definePlugin({
-    name: "Yuri",
-    description: "Sends a random yuri picture via /yuri. Uses 5 APIs with random order and automatic fallback.",
-    authors: [TestcordDevs.x2b],
+    name: "FemboyCommand",
+    description: "Sends a random femboy picture via /femboy. Uses 7 APIs with random order and automatic fallback.",
+    authors: [TestcordDevs.x2b, TestcordDevs.racify],
     commands: [
         {
-            name: "yuri",
-            description: "Send a random yuri picture in chat",
+            name: "femboy",
+            description: "Send a random femboy picture in chat",
             inputType: ApplicationCommandInputType.BUILT_IN,
             options: [
                 {
@@ -115,10 +133,10 @@ export default definePlugin({
             execute: async (args, ctx) => {
                 const mode = (findOption(args, "mode", "send") as string).toLowerCase();
 
-                const result = await fetchYuri();
+                const result = await fetchFemboy();
                 if (!result) {
                     sendBotMessage(ctx.channel.id, {
-                        content: "❌ Couldn't fetch a yuri picture — all APIs failed. Try again in a moment."
+                        content: "❌ Couldn't fetch a femboy picture — all APIs failed. Try again in a moment."
                     });
                     return;
                 }
@@ -139,7 +157,7 @@ export default definePlugin({
                         nonce: (Date.now() * 4194304).toString()
                     });
                 } catch (e) {
-                    console.error("[Yuri] Failed to send message:", e);
+                    console.error("[FemboyCommand] Failed to send message:", e);
                     sendBotMessage(ctx.channel.id, {
                         content: `⚠️ Couldn't post to chat, here's the link (from ${result.source}):\n${result.url}`
                     });
