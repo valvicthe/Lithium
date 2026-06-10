@@ -24,6 +24,8 @@ let cachedIcons: IconsDef | null = null;
 function getIcons(): IconsDef {
     if (cachedIcons) return cachedIcons;
 
+    if (!iconsModule) return {};
+
     cachedIcons = Object.fromEntries(
         Object.entries(iconsModule).filter(([name, fn]) =>
             typeof fn === "function" && name.endsWith("Icon")

@@ -173,6 +173,7 @@ export const globPlugins = (kind) => ({
                 "userplugins",
                 "equicordplugins",
                 "equicordplugins/_api",
+                "equicordplugins/_core",
                 "testcordplugins",
                 "Betterdiscordplugins/generated",
             ];

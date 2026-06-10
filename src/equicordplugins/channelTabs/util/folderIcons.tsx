@@ -10,7 +10,7 @@ import { Icon } from "@vencord/discord-types";
 let iconNames: string[] | undefined;
 
 export function getDiscordFolderIcon(name?: string): Icon | undefined {
-    if (!name) return;
+    if (!name || !iconsModule) return;
 
     const icon = iconsModule[name];
     return typeof icon === "function" && name.endsWith("Icon") ? icon : undefined;
@@ -18,6 +18,7 @@ export function getDiscordFolderIcon(name?: string): Icon | undefined {
 
 export function getDiscordFolderIconNames(): string[] {
     if (iconNames) return iconNames;
+    if (!iconsModule) return [];
 
     iconNames = Object.keys(iconsModule)
         .filter(name => name.endsWith("Icon") && typeof iconsModule[name] === "function")

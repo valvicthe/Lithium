@@ -20,12 +20,13 @@ export default definePlugin({
         {
             find: "AngleBracketsIcon",
             replacement: {
-                match: /\i\.\i\((\i)\),\i\.\i\(\i,\{AIcon/,
+                match: /\i\.\i\((\i),\s*\{[\s\S]*?["']?AngleBracketsIcon["']?\s*:/,
                 replace: "$self.iconsModule($1),$&"
             }
         }
     ],
     iconsModule(value: IconsDef) {
+        console.warn("[ConcatenatedModules] iconsModule called with:", value);
         iconsModule = value;
     },
 });
