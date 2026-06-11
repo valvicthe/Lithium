@@ -22,8 +22,9 @@ export default function UserpluginInstallButton({ props }: any) {
         return () => plugins.deregisterCallback(cid);
     });
     const { message } = props;
-    if (![...WHITELISTED_SHARE_CHANNELS, ...(settings.store.allowlistedChannels || "").split(",")].includes(ChannelStore.getChannel(message.channel_id).parent_id) && !WHITELISTED_SHARE_CHANNELS.includes(message.channel_id))
-        return;
+    const channel = ChannelStore.getChannel(message.channel_id);
+    if (![...WHITELISTED_SHARE_CHANNELS, ...(settings.store.allowlistedChannels || "").split(",")].includes(channel?.parent_id) && !WHITELISTED_SHARE_CHANNELS.includes(message.channel_id))
+        return null;
     const gitLink = (props.message.content as string).match(CLONE_LINK_REGEX);
     if (!gitLink) return;
     const idpl = gitLink.includes("plugins.nin0.dev") ? 1 : 0;
