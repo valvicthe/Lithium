@@ -185,6 +185,8 @@ let _dataVersion: number = 0;
 let allAccountsData: Record<string, CustomProfileData> = {};
 let allAccountsEnabled: Record<string, boolean> = {};
 
+const _patchRestores: Array<() => void> = [];
+
 let originalGetStatus: typeof PresenceStore.getStatus | null = null;
 let originalGetClientStatus: typeof PresenceStore.getClientStatus | null = null;
 let originalGetActivities: typeof PresenceStore.getActivities | null = null;
@@ -363,6 +365,10 @@ function applyAvatarPatchEarly() {
             }
             return orig(user, ...args);
         };
+        _patchRestores.push(() => {
+            IU.getUserAvatarURL = orig;
+            _avatarPatchApplied = false;
+        });
         _avatarPatchApplied = true;
     } catch { }
 }
@@ -1494,6 +1500,11 @@ export default definePlugin({
                 const origGet = US.getUser.bind(US);
                 US.getUser = (id: string) => isMe(id) ? this.fakeCurrentUser(origGet(id)) : origGet(id);
                 US._cp_perfect_hook = true;
+                _patchRestores.push(() => {
+                    US.getCurrentUser = origCurrent;
+                    US.getUser = origGet;
+                    US._cp_perfect_hook = false;
+                });
             }
         } catch { }
 
@@ -1524,6 +1535,11 @@ export default definePlugin({
                     }
                 };
                 UPS._cp_profile_hook = true;
+                _patchRestores.push(() => {
+                    UPS.getUserProfile = origGetProfile;
+                    UPS.getGuildMemberProfile = origGetGuild;
+                    UPS._cp_profile_hook = false;
+                });
             }
         } catch { }
 
@@ -1545,24 +1561,29 @@ export default definePlugin({
                 }
 
                 if (MAS.getUsers) {
+                    const wrappedGetUsers = MAS.getUsers;
                     const origGetUsers = MAS.getUsers.bind(MAS);
                     MAS.getUsers = () => {
                         const users = origGetUsers();
                         if (!users || !Array.isArray(users)) return users;
                         return users.map(patchAccountUser);
                     };
+                    _patchRestores.push(() => { MAS.getUsers = wrappedGetUsers; });
                 }
 
                 if (MAS.getValidUsers) {
+                    const wrappedGetValid = MAS.getValidUsers;
                     const origGetValid = MAS.getValidUsers.bind(MAS);
                     MAS.getValidUsers = () => {
                         const users = origGetValid();
                         if (!users || !Array.isArray(users)) return users;
                         return users.map(patchAccountUser);
                     };
+                    _patchRestores.push(() => { MAS.getValidUsers = wrappedGetValid; });
                 }
 
                 MAS._cp_perfect_hook = true;
+                _patchRestores.push(() => { MAS._cp_perfect_hook = false; });
                 try { MAS.emitChange?.(); } catch { }
             }
         } catch { }
@@ -1595,7 +1616,8 @@ export default definePlugin({
         // Patch getAvatarDecorationURL to inject our decoration only on our user
         try {
             const decoMod = (Vencord as any).Webpack?.findByProps?.("getAvatarDecorationURL");
-            if (decoMod?.getAvatarDecorationURL) {
+            if (decoMod?.getAvatarDecorationURL && !decoMod._cp_deco_hook) {
+                const wrappedDeco = decoMod.getAvatarDecorationURL;
                 const origDeco = decoMod.getAvatarDecorationURL.bind(decoMod);
                 decoMod.getAvatarDecorationURL = (opts: any) => {
                     try {
@@ -1615,6 +1637,11 @@ export default definePlugin({
                     } catch { }
                     return origDeco(opts);
                 };
+                decoMod._cp_deco_hook = true;
+                _patchRestores.push(() => {
+                    decoMod.getAvatarDecorationURL = wrappedDeco;
+                    decoMod._cp_deco_hook = false;
+                });
             }
         } catch { }
 
@@ -1795,6 +1822,10 @@ export default definePlugin({
         FluxDispatcher.unsubscribe("CONNECTION_OPEN", onAccountSwitch);
         stopDomObserver();
         removeHideStyle();
+        while (_patchRestores.length) {
+            const restore = _patchRestores.pop();
+            try { restore?.(); } catch { }
+        }
         if (this._origExtractTimestamp && SnowflakeUtils) {
             (SnowflakeUtils as any).extractTimestamp = this._origExtractTimestamp;
             this._origExtractTimestamp = null;
