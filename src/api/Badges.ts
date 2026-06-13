@@ -128,24 +128,14 @@ export function _getBadges(args: BadgeUserArgs) {
         ? normalizeBadges(globalBadges.getGlobalBadges(args.userId), args, badges.length)
         : [];
 
-    // do globalbadges first so it shows before the contrib badges but after donor badges
-    if (GlobalBadges.length) {
-        badges.unshift(...GlobalBadges);
-    }
-
-    if (donorBadges.length) {
-        badges.unshift(...donorBadges);
-    }
-
-    if (equicordDonorBadges.length) {
-        badges.unshift(...equicordDonorBadges);
-    }
-
-    if (testcordCustomBadges.length) {
-        badges.unshift(...testcordCustomBadges);
-    }
-
-    return badges;
+    // Build final array with prepended groups in correct order
+    return [
+        ...testcordCustomBadges,
+        ...equicordDonorBadges,
+        ...donorBadges,
+        ...GlobalBadges,
+        ...badges
+    ];
 }
 
 export interface BadgeUserArgs {
