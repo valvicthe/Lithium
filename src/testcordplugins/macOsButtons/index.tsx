@@ -185,20 +185,29 @@ export default definePlugin({
 
     start() {
         injectMacOsButtons();
+        // Coalesce mutation bursts into a single rAF-scoped check instead of
+        // running getElementById + a reparent check on every DOM mutation.
+        (this as any)._scanQueued = false;
         (this as any)._obs = new MutationObserver(() => {
-            const controls = document.getElementById("macos-window-controls");
-            if (!controls) {
-                injectMacOsButtons();
-            } else if (controls.parentElement !== document.body) {
-                // If it was moved by a layer change, put it back at the top
-                document.body.appendChild(controls);
-            }
+            if ((this as any)._scanQueued) return;
+            (this as any)._scanQueued = true;
+            requestAnimationFrame(() => {
+                (this as any)._scanQueued = false;
+                const controls = document.getElementById("macos-window-controls");
+                if (!controls) {
+                    injectMacOsButtons();
+                } else if (controls.parentElement !== document.body) {
+                    // If it was moved by a layer change, put it back at the top
+                    document.body.appendChild(controls);
+                }
+            });
         });
         (this as any)._obs.observe(document.body, { childList: true, subtree: true });
     },
 
     stop() {
         removeMacOsButtons();
+        (this as any)._scanQueued = false;
         (this as any)._obs?.disconnect();
     },
 });
