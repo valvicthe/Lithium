@@ -37,15 +37,19 @@ function getUserIdFromOutgoingRelationships(): string | null {
 }
 
 let observer: MutationObserver | null = null;
+const patchedButtons = new Set<HTMLElement>();
 
 function patchBtn(btn: HTMLElement, userId: string) {
     if (btn.dataset.cfp) return;
     btn.dataset.cfp = "1";
-    btn.addEventListener("click", (e: MouseEvent) => {
+    const handler = (e: MouseEvent) => {
         e.preventDefault();
         e.stopImmediatePropagation();
         cancelRequest(userId);
-    }, true);
+    };
+    (btn as any)._cfpHandler = handler;
+    btn.addEventListener("click", handler, true);
+    patchedButtons.add(btn);
     // Remove disabled if present so the click is possible
     btn.removeAttribute("disabled");
     btn.style.cursor = "pointer";
@@ -124,6 +128,16 @@ export default definePlugin({
     stop() {
         observer?.disconnect();
         observer = null;
+        for (const btn of patchedButtons) {
+            const handler = (btn as any)._cfpHandler;
+            if (handler) {
+                btn.removeEventListener("click", handler, true);
+                delete (btn as any)._cfpHandler;
+            }
+            delete btn.dataset.cfp;
+        }
+        patchedButtons.clear();
+        // Catch any markers left on buttons no longer tracked
         document.querySelectorAll<HTMLElement>("[data-cfp]").forEach(el => {
             delete el.dataset.cfp;
         });
