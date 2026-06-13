@@ -30,6 +30,8 @@ import type { AnyModuleFactory, AnyWebpackRequire } from "./types";
 
 const logger = new Logger("Webpack");
 
+const fnToString = Function.prototype.toString;
+
 export let _resolveReady: () => void;
 /**
  * Fired once a gateway connection to Discord has been established.
@@ -48,12 +50,18 @@ export type PropsFilter = Array<string>;
 export type CodeFilter = Array<string | RegExp>;
 export type StoreNameFilter = string;
 
-export const stringMatches = (s: string, filter: CodeFilter) =>
-    filter.every(f =>
-        typeof f === "string"
-            ? s.includes(f)
-            : (f.global && (f.lastIndex = 0), f.test(s))
-    );
+export const stringMatches = (s: string, filter: CodeFilter) => {
+    for (let i = 0; i < filter.length; i++) {
+        const f = filter[i];
+        if (typeof f === "string") {
+            if (!s.includes(f)) return false;
+        } else {
+            if (f.global) f.lastIndex = 0;
+            if (!f.test(s)) return false;
+        }
+    }
+    return true;
+};
 
 export function makeClassNameRegex(className: string) {
     return new RegExp(`(?:\\b|_)${escapeRegExp(className)}(?:\\b|_)`);
@@ -69,7 +77,7 @@ export const filters = {
         const parsedCode = code.map(canonicalizeMatch);
         const filter = m => {
             if (typeof m !== "function") return false;
-            return stringMatches(Function.prototype.toString.call(m), parsedCode);
+            return stringMatches(fnToString.call(m), parsedCode);
         };
 
         filter.$$vencordProps = [...code];
@@ -244,16 +252,18 @@ export const find = traceFunction("find", function find(filter: FilterFn, { isIn
 
     for (const key in cache) {
         const mod = cache[key];
-        if (!mod?.loaded || mod.exports == null) continue;
+        if (!mod?.loaded) continue;
+        const { exports } = mod;
+        if (exports == null) continue;
 
-        if (filter(mod.exports)) {
-            return isWaitFor ? [mod.exports, key] : mod.exports;
+        if (filter(exports)) {
+            return isWaitFor ? [exports, key] : exports;
         }
 
-        if (typeof mod.exports !== "object" || topLevelOnly) continue;
+        if (typeof exports !== "object" || topLevelOnly) continue;
 
-        for (const nestedMod in mod.exports) {
-            const nested = mod.exports[nestedMod];
+        for (const nestedMod in exports) {
+            const nested = exports[nestedMod];
             if (nested && filter(nested)) {
                 return isWaitFor ? [nested, key] : nested;
             }
@@ -274,16 +284,18 @@ export function findAll(filter: FilterFn, { topLevelOnly = false }: { topLevelOn
     const ret = [] as any[];
     for (const key in cache) {
         const mod = cache[key];
-        if (!mod?.loaded || mod.exports == null) continue;
+        if (!mod?.loaded) continue;
+        const { exports } = mod;
+        if (exports == null) continue;
 
-        if (filter(mod.exports))
-            ret.push(mod.exports);
+        if (filter(exports))
+            ret.push(exports);
 
-        if (typeof mod.exports !== "object" || topLevelOnly)
+        if (typeof exports !== "object" || topLevelOnly)
             continue;
 
-        for (const nestedMod in mod.exports) {
-            const nested = mod.exports[nestedMod];
+        for (const nestedMod in exports) {
+            const nested = exports[nestedMod];
             if (nested && filter(nested)) ret.push(nested);
         }
     }
@@ -323,25 +335,27 @@ export const findBulk = traceFunction("findBulk", function findBulk(...filterFns
     outer:
     for (const key in cache) {
         const mod = cache[key];
-        if (!mod?.loaded || mod.exports == null) continue;
+        if (!mod?.loaded) continue;
+        const { exports } = mod;
+        if (exports == null) continue;
 
         for (let j = 0; j < length; j++) {
             const filter = filters[j];
             // Already done
             if (filter === undefined) continue;
 
-            if (filter(mod.exports)) {
-                results[j] = mod.exports;
+            if (filter(exports)) {
+                results[j] = exports;
                 filters[j] = undefined;
                 if (++found === length) break outer;
                 break;
             }
 
-            if (typeof mod.exports !== "object")
+            if (typeof exports !== "object")
                 continue;
 
-            for (const nestedMod in mod.exports) {
-                const nested = mod.exports[nestedMod];
+            for (const nestedMod in exports) {
+                const nested = exports[nestedMod];
                 if (nested && filter(nested)) {
                     results[j] = nested;
                     filters[j] = undefined;
