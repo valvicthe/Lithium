@@ -7,6 +7,7 @@
 import "./styles.css";
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
+import { addChannelToolbarButton, addHeaderBarButton, ChannelToolbarButton, HeaderBarButton, removeChannelToolbarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
 import { EquicordDevs, TestcordDevs } from "@utils/constants";
 import { Logger } from "@utils/Logger";
@@ -17,6 +18,17 @@ import { Clickable, Popout, React } from "@webpack/common";
 const logger = new Logger("BetterFormattingRedux");
 
 const settings = definePluginSettings({
+    location: {
+        type: OptionType.SELECT,
+        description: "Where to show the button",
+        options: [
+            { label: "Chat bar", value: "chatbar", default: true },
+            { label: "Header bar", value: "headerbar" },
+            { label: "Channel toolbar", value: "channeltoolbar" },
+            { label: "Disabled", value: "disabled" },
+        ],
+        restartNeeded: true,
+    },
     enableWrapperSyntax: {
         type: OptionType.BOOLEAN,
         description: "Convert wrapper syntax (e.g. ^^text^^) to Unicode on send",
@@ -195,7 +207,7 @@ const FormatButton: ChatBarButtonFactory = ({ isMainChat }) => {
     const [open, setOpen] = React.useState(false);
     const buttonRef = React.useRef<HTMLDivElement>(null);
 
-    if (!isMainChat || !showButton) return null;
+    if (!isMainChat || !showButton || settings.store.location !== "chatbar") return null;
 
     return (
         <Popout
@@ -271,5 +283,31 @@ export default definePlugin({
     chatBarButton: {
         icon: FormatIcon,
         render: FormatButton,
+    },
+
+    start() {
+        const { location } = settings.store;
+        if (location === "headerbar") {
+            addHeaderBarButton("BetterFormattingRedux", () => (
+                <HeaderBarButton
+                    icon={FormatIcon}
+                    tooltip="Text Formatting"
+                    onClick={() => { }}
+                />
+            ), 5);
+        } else if (location === "channeltoolbar") {
+            addChannelToolbarButton("BetterFormattingRedux", () => (
+                <ChannelToolbarButton
+                    icon={FormatIcon}
+                    tooltip="Text Formatting"
+                    onClick={() => { }}
+                />
+            ), 5);
+        }
+    },
+
+    stop() {
+        removeHeaderBarButton("BetterFormattingRedux");
+        removeChannelToolbarButton("BetterFormattingRedux");
     },
 });
