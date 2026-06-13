@@ -23,6 +23,16 @@ import { Devs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
 import { useMemo, UserStore } from "@webpack/common";
 
+const h64Cache = new Map<string, bigint>();
+function cachedH64(id: string): bigint {
+    let cached = h64Cache.get(id);
+    if (cached === undefined) {
+        cached = h64(id);
+        h64Cache.set(id, cached);
+    }
+    return cached;
+}
+
 // Calculate a CSS color string based on the user ID
 function calculateNameColorForUser(id?: string) {
     const { lightness } = settings.use(["lightness"]);
@@ -130,8 +140,8 @@ export default definePlugin({
         if (context?.channel?.isPrivate?.() && dmColor && userId) {
             const currentUserId = UserStore.getCurrentUser()?.id;
             if (currentUserId && userId !== currentUserId) {
-                const currentUserColor = Number(h64(currentUserId) % 360n);
-                const otherUserColor = Number(h64(userId) % 360n);
+                const currentUserColor = Number(cachedH64(currentUserId) % 360n);
+                const otherUserColor = Number(cachedH64(userId) % 360n);
                 const colorDiff = Math.min(Math.abs(currentUserColor - otherUserColor), 360 - Math.abs(currentUserColor - otherUserColor));
                 if (colorDiff < 70) {
                     const newColor = (otherUserColor + 180) % 360;
