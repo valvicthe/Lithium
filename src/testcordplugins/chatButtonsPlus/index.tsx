@@ -7,6 +7,7 @@
 import "./styles.css";
 
 import { ChatBarButton } from "@api/ChatButtons";
+import { addChannelToolbarButton, addHeaderBarButton, ChannelToolbarButton, HeaderBarButton, removeChannelToolbarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { DataStore } from "@api/index";
 import { definePluginSettings, migratePluginSettings, Settings } from "@api/Settings";
 import { FormSwitch } from "@components/FormSwitch";
@@ -256,6 +257,17 @@ function ButtonEntries() {
 }
 
 const settings = definePluginSettings({
+    location: {
+        type: OptionType.SELECT,
+        description: "Where to show the button",
+        options: [
+            { label: "Chat bar", value: "chatbar", default: true },
+            { label: "Header bar", value: "headerbar" },
+            { label: "Channel toolbar", value: "channeltoolbar" },
+            { label: "Disabled", value: "disabled" },
+        ],
+        restartNeeded: true,
+    },
     buttons: {
         type: OptionType.COMPONENT,
         description: "Manage your custom chat buttons",
@@ -271,8 +283,14 @@ export default definePlugin({
     authors: [TestcordDevs.x2b],
     settings,
 
-    renderChatBarButton: (({ isMainChat }) => {
-        if (!isMainChat) return null;
+    chatBarButton: {
+        icon: (() => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </svg>
+        )) as any,
+        render: (({ isMainChat }) => {
+            if (!isMainChat || settings.store.location !== "chatbar") return null;
 
         return (
             <>
@@ -290,6 +308,7 @@ export default definePlugin({
             </>
         );
     }) as any,
+    },
 
     async start() {
         const storedEntries = await DataStore.get(BUTTON_ENTRIES_KEY) ?? [];
@@ -321,6 +340,38 @@ export default definePlugin({
         await DataStore.set(BUTTON_ENTRIES_KEY, storedEntries);
 
         buttonEntries = storedEntries;
+
+        const { location } = settings.store;
+        if (location === "headerbar") {
+            addHeaderBarButton("ChatButtonsPlus", () => (
+                <HeaderBarButton
+                    icon={() => (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                        </svg>
+                    )}
+                    tooltip="Chat Buttons Plus"
+                    onClick={() => {}}
+                />
+            ), 5);
+        } else if (location === "channeltoolbar") {
+            addChannelToolbarButton("ChatButtonsPlus", () => (
+                <ChannelToolbarButton
+                    icon={() => (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                        </svg>
+                    )}
+                    tooltip="Chat Buttons Plus"
+                    onClick={() => {}}
+                />
+            ), 5);
+        }
+    },
+
+    stop() {
+        removeHeaderBarButton("ChatButtonsPlus");
+        removeChannelToolbarButton("ChatButtonsPlus");
     }
 });
 
