@@ -292,7 +292,7 @@ export default definePlugin({
                 <HeaderBarButton
                     icon={FormatIcon}
                     tooltip="Text Formatting"
-                    onClick={() => { }}
+                    onClick={() => {}}
                 />
             ), 5);
         } else if (location === "channeltoolbar") {
@@ -300,7 +300,7 @@ export default definePlugin({
                 <ChannelToolbarButton
                     icon={FormatIcon}
                     tooltip="Text Formatting"
-                    onClick={() => { }}
+                    onClick={() => {}}
                 />
             ), 5);
         }
