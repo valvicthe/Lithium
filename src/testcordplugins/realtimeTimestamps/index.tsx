@@ -1,12 +1,12 @@
 /*
- * Nightcord, a Discord client mod
+ * Vencord, a Discord client mod
  * Copyright (c) 2025 Nightcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
-import { moment, useEffect, useReducer } from "@webpack/common";
+import { moment, useCallback, useEffect, useReducer } from "@webpack/common";
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 
@@ -32,35 +32,63 @@ const settings = definePluginSettings({
     },
 });
 
-// ─── Tick hook — forces a re-render every second ─────────────────────────────
+// ─── Shared global tick — one interval for all timestamps ────────────────────
 
-function useSecondTick() {
-    const [, tick] = useReducer((n: number) => n + 1, 0);
-    useEffect(() => {
-        const id = setInterval(tick, 1000);
-        return () => clearInterval(id);
-    }, []);
+let tickInterval: ReturnType<typeof setInterval> | null = null;
+let tickVersion = 0;
+const tickListeners = new Set<() => void>();
+
+function notifyTickListeners() {
+    tickVersion++;
+    for (const listener of tickListeners) listener();
+}
+
+function startTick() {
+    if (tickInterval !== null) return;
+    tickVersion = 0;
+    tickInterval = setInterval(notifyTickListeners, 1000);
+}
+
+function stopTick() {
+    if (tickInterval !== null) {
+        clearInterval(tickInterval);
+        tickInterval = null;
+    }
+    tickVersion = 0;
+    tickListeners.clear();
+}
+
+function subscribeTick(callback: () => void): () => void {
+    tickListeners.add(callback);
+    return () => { tickListeners.delete(callback); };
+}
+
+function getTickVersion() {
+    return tickVersion;
+}
+
+// ─── Hook that re-renders on the global tick ─────────────────────────────────
+
+function useGlobalTick() {
+    const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
+    useEffect(() => subscribeTick(forceUpdate), []);
 }
 
 // ─── Renderers called by the patches ─────────────────────────────────────────
 
 function renderTimestamp(date: Date, type: "cozy" | "compact" | "tooltip"): string {
-    // Hook must be called unconditionally — React requires this
-    useSecondTick();
+    useGlobalTick();
 
     const fmt = settings.store.format ?? "HH:mm:ss";
 
     switch (type) {
         case "cozy":
-            // Cozy mode: replace the default "Today at HH:mm" with seconds
             return moment(date).format(fmt);
         case "compact":
-            // Compact mode (grouped message line): show seconds if enabled
             return settings.store.showInCompact
                 ? moment(date).format(fmt)
                 : moment(date).format("LT");
         case "tooltip":
-            // Tooltip on hover: full date + seconds
             return settings.store.showInTooltip
                 ? moment(date).format(`dddd, MMMM D, YYYY [at] ${fmt}`)
                 : moment(date).format("LLLL");
@@ -110,4 +138,12 @@ export default definePlugin({
             },
         },
     ],
+
+    start() {
+        startTick();
+    },
+
+    stop() {
+        stopTick();
+    },
 });
