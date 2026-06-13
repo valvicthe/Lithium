@@ -113,6 +113,11 @@ function openLoginModal() {
     openModal(props => <LoginWithTokenModal rootProps={props} />);
 }
 
+function onLoginButtonClick(e: MouseEvent) {
+    e.preventDefault();
+    openLoginModal();
+}
+
 function tryInject() {
     if (document.getElementById(MOUNT_ID)) return;
 
@@ -143,7 +148,7 @@ function tryInject() {
                 "padding:0",
                 "text-decoration:underline",
             ].join(";");
-            btn.addEventListener("click", e => { e.preventDefault(); openLoginModal(); });
+            btn.addEventListener("click", onLoginButtonClick);
 
             mount.appendChild(btn);
             forgotLink.parentElement?.insertBefore(mount, forgotLink.nextSibling);
@@ -161,7 +166,7 @@ function tryInject() {
     const btn = document.createElement("button");
     btn.textContent = "Login with token";
     btn.style.cssText = "background:none;border:none;color:var(--text-link,#00b0f4);cursor:pointer;font-size:14px;font-ffriendly:inherit;padding:0;text-decoration:underline";
-    btn.addEventListener("click", e => { e.preventDefault(); openLoginModal(); });
+    btn.addEventListener("click", onLoginButtonClick);
     mount.appendChild(btn);
     form.appendChild(mount);
 }
