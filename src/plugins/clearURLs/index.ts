@@ -47,6 +47,9 @@ interface RuleSet {
     exceptions?: RegExp[];
 }
 
+const HAS_URL_RE = /https?:\/\//;
+const URL_MATCH_RE = /(https?:\/\/[^\s<]+[^<.,:;"'>)|\]\s])/g;
+
 export default definePlugin({
     name: "ClearURLs",
     description: "Automatically removes tracking elements from URLs you send",
@@ -138,9 +141,9 @@ export default definePlugin({
 
     cleanMessage(msg: MessageObject) {
         // Only run on messages that contain URLs
-        if (/http(s)?:\/\//.test(msg.content)) {
+        if (HAS_URL_RE.test(msg.content)) {
             msg.content = msg.content.replace(
-                /(https?:\/\/[^\s<]+[^<.,:;"'>)|\]\s])/g,
+                URL_MATCH_RE,
                 match => this.replacer(match)
             );
         }
