@@ -5,6 +5,7 @@
  */
 
 import { addChatBarButton, ChatBarButton, ChatBarButtonFactory, removeChatBarButton } from "@api/ChatButtons";
+import { addChannelToolbarButton, addHeaderBarButton, ChannelToolbarButton, HeaderBarButton, removeChannelToolbarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { addMessagePreSendListener, MessageSendListener, removeMessagePreSendListener } from "@api/MessageEvents";
 import { updateMessage } from "@api/MessageUpdater";
 import { definePluginSettings } from "@api/Settings";
@@ -32,6 +33,17 @@ const LockUnlockedIcon: IconComponent = ({ height = 20, width = 20, className })
 // ────────────────────────────────────────────────────────────────── settings
 
 export const settings = definePluginSettings({
+    location: {
+        type: OptionType.SELECT,
+        description: "Where to show the encryption button",
+        options: [
+            { label: "Chat bar", value: "chatbar", default: true },
+            { label: "Header bar", value: "headerbar" },
+            { label: "Channel toolbar", value: "channeltoolbar" },
+            { label: "Disabled", value: "disabled" },
+        ],
+        restartNeeded: true,
+    },
     // ── Firewall (native) ──────────────────────────────────────────────
     firewall: {
         type: OptionType.BOOLEAN, default: true, restartNeeded: true,
@@ -216,7 +228,7 @@ function tryDecrypt(content: string): string | null {
 
 const ChatBarIcon: ChatBarButtonFactory = ({ isMainChat }) => {
     const { messageEncryption, encryptionActive } = settings.use(["messageEncryption", "encryptionActive"]);
-    if (!isMainChat || !messageEncryption) return null;
+    if (!isMainChat || !messageEncryption || settings.store.location !== "chatbar") return null;
     return (
         <ChatBarButton
             tooltip={encryptionActive ? "Encryption ON" : "Encryption OFF"}
@@ -293,11 +305,32 @@ export default definePlugin({
                 logger.error("Failed to initialize message encryption:", e);
             }
         }
+
+        const { location } = settings.store;
+        if (settings.store.messageEncryption && location === "headerbar") {
+            addHeaderBarButton("GoofcordSecurity", () => (
+                <HeaderBarButton
+                    icon={() => settings.store.encryptionActive ? <LockIcon /> : <LockUnlockedIcon />}
+                    tooltip={settings.store.encryptionActive ? "Encryption ON" : "Encryption OFF"}
+                    onClick={() => { settings.store.encryptionActive = !settings.store.encryptionActive; }}
+                />
+            ), 5);
+        } else if (settings.store.messageEncryption && location === "channeltoolbar") {
+            addChannelToolbarButton("GoofcordSecurity", () => (
+                <ChannelToolbarButton
+                    icon={() => settings.store.encryptionActive ? <LockIcon /> : <LockUnlockedIcon />}
+                    tooltip={settings.store.encryptionActive ? "Encryption ON" : "Encryption OFF"}
+                    onClick={() => { settings.store.encryptionActive = !settings.store.encryptionActive; }}
+                />
+            ), 5);
+        }
     },
 
     stop() {
         unpatchWebRtc();
         removeChatBarButton("GoofcordSecurityEncrypt");
+        removeHeaderBarButton("GoofcordSecurity");
+        removeChannelToolbarButton("GoofcordSecurity");
         removeMessagePreSendListener(onSend);
         try {
             FluxDispatcher.unsubscribe("MESSAGE_CREATE", onMessageCreate);
