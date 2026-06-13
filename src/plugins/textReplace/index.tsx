@@ -311,6 +311,8 @@ function TextReplaceTesting() {
     );
 }
 
+const TRIM_EDGES_RE = /^\s|\s$/g;
+
 function applyRules(content: string, scope: "myMessages" | "othersMessages" | "allMessages"): string {
     if (content.length === 0) {
         return content;
@@ -321,7 +323,7 @@ function applyRules(content: string, scope: "myMessages" | "othersMessages" | "a
         if (rule.onlyIfIncludes && !content.includes(rule.onlyIfIncludes)) continue;
         if (rule.scope !== "allMessages" && rule.scope !== scope && scope !== "allMessages") continue;
 
-        content = ` ${content} `.replaceAll(rule.find, rule.replace.replaceAll("\\n", "\n")).replace(/^\s|\s$/g, "");
+        content = ` ${content} `.replaceAll(rule.find, rule.replace.replaceAll("\\n", "\n")).replace(TRIM_EDGES_RE, "");
     }
 
     for (const rule of settings.store.regexRules) {
