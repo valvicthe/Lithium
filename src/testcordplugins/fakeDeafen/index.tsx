@@ -167,6 +167,9 @@ export default definePlugin({
     tags: ["Voice", "Privacy"],
     authors: [TestcordDevs.dot],
 
+    lastVoiceChannelId: null as string | null,
+    _boundVoiceChannelChange: null as ((...args: any[]) => void) | null,
+
     state(type: string, real: boolean) {
         if (type === "mute" && !states.mute) return true;
         else if (type === "deafen" && !states.deafen) return true;
@@ -195,7 +198,8 @@ export default definePlugin({
 
         // Add event listeners
         document.addEventListener('keydown', handleKeydown);
-        SelectedChannelStore.addChangeListener(this.handleVoiceChannelChange.bind(this));
+        this._boundVoiceChannelChange = this.handleVoiceChannelChange.bind(this);
+        SelectedChannelStore.addChangeListener(this._boundVoiceChannelChange);
 
         Toasts.show({
             message: `🎤 Fake Voice Plugin loaded! Use ${settings.store.muteKeybind.toUpperCase()} (mute) and ${settings.store.deafenKeybind.toUpperCase()} (deafen+mute)`,
@@ -210,7 +214,10 @@ export default definePlugin({
 
     stop() {
         document.removeEventListener('keydown', handleKeydown);
-        SelectedChannelStore.removeChangeListener(this.handleVoiceChannelChange.bind(this));
+        if (this._boundVoiceChannelChange) {
+            SelectedChannelStore.removeChangeListener(this._boundVoiceChannelChange);
+            this._boundVoiceChannelChange = null;
+        }
 
         // Clean up tracking
         this.lastVoiceChannelId = null;
