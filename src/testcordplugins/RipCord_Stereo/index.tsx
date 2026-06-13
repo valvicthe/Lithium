@@ -42,6 +42,8 @@ export default definePlugin({
     tags: ["Voice", "Utility"],
     settings,
 
+    _patchedConns: new Set<any>(),
+
     patches: [
         {
             find: "updateVideoQuality",
@@ -65,7 +67,11 @@ export default definePlugin({
                 return;
             }
 
+            if (thisObj.conn._ripCordStereoOrig) return;
+
             const original = thisObj.conn.setTransportOptions;
+            thisObj.conn._ripCordStereoOrig = original;
+            this._patchedConns.add(thisObj.conn);
             console.log("[RipCordStereo] Successfully hooked setTransportOptions");
 
             thisObj.conn.setTransportOptions = function (obj: any) {
@@ -150,6 +156,15 @@ export default definePlugin({
     },
 
     stop() {
+        for (const conn of this._patchedConns) {
+            try {
+                if (conn._ripCordStereoOrig) {
+                    conn.setTransportOptions = conn._ripCordStereoOrig;
+                    delete conn._ripCordStereoOrig;
+                }
+            } catch { }
+        }
+        this._patchedConns.clear();
         console.log("[RipCordStereo] Plugin stopped");
     }
 });
