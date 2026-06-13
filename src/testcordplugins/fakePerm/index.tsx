@@ -593,6 +593,7 @@ export default definePlugin({
     },
 
     _domObserver: null as MutationObserver | null,
+    _domTimer: null as ReturnType<typeof setTimeout> | null,
 
     applyDomOverrides() {
         if (!isEnabled) return;
@@ -637,12 +638,11 @@ export default definePlugin({
         document.head.appendChild(style);
 
         // MutationObserver for DOM overrides
-        let _domTimer: ReturnType<typeof setTimeout> | null = null;
         this._domObserver = new MutationObserver(() => {
             if (!isEnabled) return;
             if (fakeNicks.size === 0 && disconnectedUsers.size === 0 && kickedUsers.size === 0) return;
-            if (_domTimer) return;
-            _domTimer = setTimeout(() => { _domTimer = null; if (isEnabled) this.applyDomOverrides(); }, 150);
+            if (this._domTimer) return;
+            this._domTimer = setTimeout(() => { this._domTimer = null; if (isEnabled) this.applyDomOverrides(); }, 150);
         });
         this._domObserver.observe(document.body, { childList: true, subtree: true });
     },
@@ -650,6 +650,7 @@ export default definePlugin({
     stop() {
         this._domObserver?.disconnect();
         this._domObserver = null;
+        if (this._domTimer) { clearTimeout(this._domTimer); this._domTimer = null; }
         removeHideStyle();
         removeContextMenuPatch("user-context", userContextPatch);
         removeContextMenuPatch("message", messageContextPatch);
