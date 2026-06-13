@@ -8,7 +8,6 @@ import { definePluginSettings } from "@api/Settings";
 import { sendBotMessage } from "@api/Commands";
 import { addMessagePreSendListener, removeMessagePreSendListener, MessageSendListener } from "@api/MessageEvents";
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
-import { addChannelToolbarButton, addHeaderBarButton, ChannelToolbarButton, HeaderBarButton, removeChannelToolbarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { Devs } from "@utils/constants";
 import { TestcordDevs } from "@utils/constants";
 import definePlugin, { IconComponent, OptionType } from "@utils/types";
@@ -327,7 +326,7 @@ const EncryptionToggleButton: ChatBarButtonFactory = ({ channel, type }) => {
     
     const validChat = ["normal", "sidebar"].some(x => type.analyticsName === x);
     
-    if (!validChat || settings.store.location !== "chatbar") return null;
+    if (!validChat) return null;
     
     return (
         <ChatBarButton
@@ -352,17 +351,6 @@ const EncryptionToggleButton: ChatBarButtonFactory = ({ channel, type }) => {
 
 // Plugin settings definition with enhanced security
 const settings = definePluginSettings({
-    location: {
-        type: OptionType.SELECT,
-        description: "Where to show the button",
-        options: [
-            { label: "Chat bar", value: "chatbar", default: true },
-            { label: "Header bar", value: "headerbar" },
-            { label: "Channel toolbar", value: "channeltoolbar" },
-            { label: "Disabled", value: "disabled" },
-        ],
-        restartNeeded: true,
-    },
     encryptionPassword: {
         type: OptionType.STRING,
         description: "AES-256 encryption password (shared with other users)",
