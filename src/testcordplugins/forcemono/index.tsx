@@ -12,6 +12,9 @@ import EventEmitter from "events";
 
 let MediaEngineStore;
 let Connection;
+let mediaEngineEmitter: EventEmitter | null = null;
+let connectionHandler: ((connection: any) => void) | null = null;
+const patchedConns = new Set<any>();
 
 const settings = definePluginSettings({
     forceMono: {
@@ -105,13 +108,20 @@ export default definePlugin({
             const mediaEngine = MediaEngineStore.getMediaEngine();
             if (!mediaEngine) return;
 
-            const emitter: EventEmitter = mediaEngine.emitter;
+            mediaEngineEmitter = mediaEngine.emitter;
 
-            emitter.on("connection", (connection) => {
+            connectionHandler = (connection: any) => {
                 if (connection.context === "default") {
                     Connection = connection;
 
+                    if (connection.conn._forceMonoOrig) {
+                        updateDecoder();
+                        return;
+                    }
+
                     const originalSetOptions = connection.conn.setTransportOptions;
+                    connection.conn._forceMonoOrig = originalSetOptions;
+                    patchedConns.add(connection.conn);
 
                     // Injection hook to keep mono active during channel swaps
                     connection.conn.setTransportOptions = function (options: Record<string, any>) {
@@ -123,7 +133,9 @@ export default definePlugin({
 
                     updateDecoder();
                 }
-            });
+            };
+
+            mediaEngineEmitter.on("connection", connectionHandler);
         });
     },
 
@@ -131,5 +143,22 @@ export default definePlugin({
         // Revert to stereo when plugin is stopped
         settings.store.forceMono = false;
         updateDecoder();
+
+        if (mediaEngineEmitter && connectionHandler) {
+            mediaEngineEmitter.removeListener("connection", connectionHandler);
+        }
+        connectionHandler = null;
+        mediaEngineEmitter = null;
+
+        for (const conn of patchedConns) {
+            try {
+                if (conn._forceMonoOrig) {
+                    conn.setTransportOptions = conn._forceMonoOrig;
+                    delete conn._forceMonoOrig;
+                }
+            } catch { }
+        }
+        patchedConns.clear();
+        Connection = undefined;
     }
 });
