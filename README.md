@@ -6,13 +6,13 @@
 [![Owner](https://img.shields.io/badge/Owner-x2b1-red?logo=github&logoColor=white)](https://github.com/x2b1)
 [![Owner](https://img.shields.io/badge/Owner-dxrx99-orange?logo=github&logoColor=white)](https://github.com/dxrx99)
 
-Testcord is a fork of [Equicord](https://github.com/Equicord/Equicord) which is a fork of [Vencord](https://github.com/Vendicated/Vencord), with over 500 plugins.
+Testcord is a fork of [Equicord](https://github.com/Equicord/Equicord) which is a fork of [Vencord](https://github.com/Vendicated/Vencord), with over 710 plugins.
 
 You can join our [Discord server](https://discord.gg/EMDpkV57gW) for commits, changes, chatting, or even support.
 
 ## What makes Testcord different?
 
-- **670+ plugins**, more than any other fork
+- **710+ plugins**, more than any other fork
 - **No rules** on which plugins can be added
 - You decide what plugins you wanna use, not some admin that might not be comfortable with it (indi reference)
 - Less stable, more fun
@@ -42,7 +42,10 @@ Testcord's included plugins can be found [here](https://Testcord.dev).
 ## Installing Testcord Devbuild — recommended
 
 shell:
+
+```sh
 bash -c "$(curl -sS https://raw.githubusercontent.com/TestcordDev/Testcord/refs/heads/main/misc/install.sh)"
+```
 
 ### Dependencies
 
