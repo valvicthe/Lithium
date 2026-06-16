@@ -37,6 +37,9 @@ export const cacheSentMessages = new LimitedMap<string, LoggedMessageJSON>();
 export const cl = classNameFactory("vc-msg-logger-enhanced-");
 
 let didClearLogsOnStartup = false;
+const processedPayloads = new WeakSet<any>();
+const mergedMessageCache = new Map<string, LoggedMessageJSON>();
+const mergedEditTimestamps = new Map<string, number>();
 
 const cacheThing = findByPropsLazy("commit", "getOrCreate");
 
@@ -274,7 +277,7 @@ export default definePlugin({
                 },
                 {
                     match: /(?<=type:"LOAD_MESSAGES_SUCCESS",.{1,100})messages:(\i)/,
-                    replace: "get messages() {return $self.coolReAddDeletedMessages($1, this);}"
+                    replace: "get messages() {return $self.coolReAddMessagesOnce($1, this);}"
                 }
 
             ]
@@ -377,6 +380,12 @@ export default definePlugin({
         }
     },
 
+    coolReAddMessagesOnce(messages: any[] & { extra?: any[]; }, payload: any) {
+        if (processedPayloads.has(payload)) return messages;
+        processedPayloads.add(payload);
+        return this.coolReAddDeletedMessages(messages, payload);
+    },
+
     isDeletedMessage: (id: string) => cacheSentMessages.get(id)?.deleted ?? false,
 
     getDeleted(m1, m2) {
@@ -411,14 +420,22 @@ export default definePlugin({
             if (MLMessage.deleted)
                 return messageJsonToMessageClass({ message: MLMessage });
 
-            // update the edited message with the latest data
             const latestMessage = this.oldGetMessage(channelId, messageId);
-            return messageJsonToMessageClass({
-                message: {
-                    ...MLMessage,
-                    ...(latestMessage ?? {}),
+
+            // Reuse cached merged object when message hasn't been edited
+            // This gives messageJsonToMessageClass's memoize a stable reference
+            const cached = mergedMessageCache.get(messageId);
+            if (cached) {
+                const latestEditTS = latestMessage?.editedTimestamp?.valueOf?.() ?? 0;
+                if (mergedEditTimestamps.get(messageId) === latestEditTS) {
+                    return messageJsonToMessageClass({ message: cached });
                 }
-            });
+            }
+
+            const merged = { ...MLMessage, ...(latestMessage ?? {}) };
+            mergedMessageCache.set(messageId, merged);
+            mergedEditTimestamps.set(messageId, latestMessage?.editedTimestamp?.valueOf?.() ?? 0);
+            return messageJsonToMessageClass({ message: merged });
         };
 
         Native.init();
@@ -443,5 +460,7 @@ export default definePlugin({
     stop() {
         removeContextMenuBindings();
         MessageStore.getMessage = this.oldGetMessage;
+        mergedMessageCache.clear();
+        mergedEditTimestamps.clear();
     }
 });

@@ -44,17 +44,18 @@ export interface MLIDB extends DBSchema {
 export let db: IDBPDatabase<MLIDB>;
 export const cachedMessages = new Map<string, LoggedMessageJSON>();
 
-// this is probably not the best way to do this
 async function cacheRecords(records: DBMessageRecord[]) {
     for (const r of records) {
         cacheRecord(r);
 
-        for (const att of r.message.attachments) {
-            const blobUrl = await getAttachmentBlobUrl(att);
-            if (blobUrl) {
-                att.url = blobUrl + "#";
-                att.proxy_url = blobUrl + "#";
-            }
+        if (r.message.attachments.length > 0) {
+            await Promise.all(r.message.attachments.map(async att => {
+                const blobUrl = await getAttachmentBlobUrl(att);
+                if (blobUrl) {
+                    att.url = blobUrl + "#";
+                    att.proxy_url = blobUrl + "#";
+                }
+            }));
         }
     }
     return records;

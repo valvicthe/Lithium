@@ -29,21 +29,23 @@ export * from "./misc";
 
 // stolen from mlv2
 // https://github.com/1Lighty/BetterDiscordPlugins/blob/master/Plugins/MessageLoggerV2/MessageLoggerV2.plugin.js#L2367
-interface Id { id: string, time: number; message?: LoggedMessageJSON; }
 export const DISCORD_EPOCH = 14200704e5;
+
 export function reAddDeletedMessages(messages: LoggedMessageJSON[], deletedMessages: LoggedMessageJSON[], channelStart: boolean, channelEnd: boolean) {
     if (!messages.length || !deletedMessages?.length) return;
-    const IDs: Id[] = [];
-    const savedIDs: Id[] = [];
 
-    for (let i = 0, len = messages.length; i < len; i++) {
+    // Build timestamp arrays for range computation (preserving original boundary logic)
+    const IDs: { id: string; time: number; }[] = [];
+    const savedIDs: { id: string; time: number; message: LoggedMessageJSON; }[] = [];
+
+    for (let i = 0; i < messages.length; i++) {
         const { id } = messages[i] || {};
         if (!id) continue;
         const parsedId = parseInt(id);
         if (isNaN(parsedId)) continue;
-        IDs.push({ id: id, time: (parsedId / 4194304) + DISCORD_EPOCH });
+        IDs.push({ id, time: (parsedId / 4194304) + DISCORD_EPOCH });
     }
-    for (let i = 0, len = deletedMessages.length; i < len; i++) {
+    for (let i = 0; i < deletedMessages.length; i++) {
         const record = deletedMessages[i];
         if (!record || !record.id) continue;
         const parsedId = parseInt(record.id);
@@ -60,14 +62,35 @@ export function reAddDeletedMessages(messages: LoggedMessageJSON[], deletedMessa
     if (lowestIDX === -1) return;
     const highestIDX = channelStart ? savedIDs.length - 1 : findLastIndex(savedIDs, e => e.time < highestTime);
     if (highestIDX === -1) return;
-    const reAddIDs = savedIDs.slice(lowestIDX, highestIDX + 1);
-    reAddIDs.push(...IDs);
-    reAddIDs.sort((a, b) => b.time - a.time);
-    for (let i = 0, len = reAddIDs.length; i < len; i++) {
-        const { id, message } = reAddIDs[i];
-        if (messages.findIndex(e => e && e.id === id) !== -1) continue;
-        if (!message) continue;
-        messages.splice(i, 0, message);
+
+    // Extract message objects from the range, dedupe with Set (O(1) vs O(n) findIndex)
+    const existingIds = new Set<string>();
+    for (let i = 0; i < messages.length; i++) {
+        const mid = messages[i]?.id;
+        if (mid) existingIds.add(mid);
+    }
+
+    const toInsert: LoggedMessageJSON[] = [];
+    for (let i = lowestIDX; i <= highestIDX; i++) {
+        const entry = savedIDs[i];
+        if (entry?.message && !existingIds.has(entry.id)) {
+            toInsert.push(entry.message);
+        }
+    }
+    if (!toInsert.length) return;
+
+    // Build combined array sorted newest-first (fixes original splice-at-wrong-position bug)
+    const combined = messages.concat(toInsert);
+    combined.sort((a, b) => {
+        const ta = a?.id ? (parseInt(a.id) / 4194304 + DISCORD_EPOCH) : 0;
+        const tb = b?.id ? (parseInt(b.id) / 4194304 + DISCORD_EPOCH) : 0;
+        return tb - ta;
+    });
+
+    // Assign back in-place
+    messages.length = 0;
+    for (let i = 0; i < combined.length; i++) {
+        messages.push(combined[i]);
     }
 }
 
