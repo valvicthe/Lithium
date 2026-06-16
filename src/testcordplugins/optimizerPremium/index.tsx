@@ -222,6 +222,53 @@ const settings = definePluginSettings({
         description: "Consolidate multiple MutationObservers into a single shared observer with priority dispatch.",
         default: true,
         restartNeeded: true
+    },
+    suppressReactionAnimations: {
+        type: OptionType.BOOLEAN,
+        description: "Strip entrance/exit animations from reaction buttons. Those pop/glow transitions cause layout on every reaction add.",
+        default: true,
+        restartNeeded: true
+    },
+    fluxBatchUpdates: {
+        type: OptionType.BOOLEAN,
+        description: "Coalesce multiple rapid Flux dispatches (e.g. MESSAGE_CREATE spam) into a single update via microtask. Reduces intermediate renders during message bursts.",
+        default: false,
+        restartNeeded: true
+    },
+    messageContentVisibility: {
+        type: OptionType.BOOLEAN,
+        description: "Apply content-visibility: auto on message list items so the browser skips layout/paint for offscreen messages entirely. Stronger than contain.",
+        default: false
+    },
+    suppressEmbedPreviews: {
+        type: OptionType.BOOLEAN,
+        description: "Stop link preview (embed) auto-generation from the client side. Reduces network and DOM cost. Actual link previews from other users still show.",
+        default: false,
+        restartNeeded: true
+    },
+    disableAnimatedEmoji: {
+        type: OptionType.BOOLEAN,
+        description: "Force all emoji to render as static. Cuts continuous re-decode of animated emoji in active channels.",
+        default: false
+    },
+    limitConcurrentRequests: {
+        type: OptionType.SLIDER,
+        description: "Cap concurrent network requests. 0 = unlimited. Prevents browser connection throttling from saturating the limit.",
+        markers: [0, 6, 12, 24, 50],
+        default: 0,
+        stickToMarkers: false
+    },
+    suppressGifAutoplay: {
+        type: OptionType.BOOLEAN,
+        description: "Prevent GIFs in embeds from autoplaying. Only plays when you hover the embed. Cuts decode CPU dramatically.",
+        default: false
+    },
+    debounceFluxMessages: {
+        type: OptionType.SLIDER,
+        description: "Debounce MESSAGE_CREATE dispatches by this many ms. 0 = no debounce. Helpful in very active channels — messages batch into fewer renders.",
+        markers: [0, 50, 100, 200, 500],
+        default: 0,
+        stickToMarkers: false
     }
 });
 
@@ -296,6 +343,14 @@ export default definePlugin({
                 match: /let \i=Date\.now\(\),(\i=\i\.Z\.flush\(\i,\i\));\i\.\i\.showPerformanceTelemetry\?.+?Telemetry\(.+?,\i\)/,
                 replace: "$1"
             }
+        },
+        {
+            find: /reactionAnimations/,
+            predicate: () => settings.store.suppressReactionAnimations,
+            replacement: {
+                match: /reactionAnimations:\i,/,
+                replace: "reactionAnimations:{reactionPop:{},reactionBurst:{}},",
+            }
         }
     ],
 
@@ -328,6 +383,14 @@ export default definePlugin({
     rafFakeCounter: 1 << 30,
     consolidatedObserver: null as MutationObserver | null,
     observerCallbacks: new Map<string, (records: MutationRecord[]) => void>(),
+    animatedEmojiObserver: null as MutationObserver | null,
+    gifAutoplayObserver: null as MutationObserver | null,
+    fluxDispatchOriginal: null as ((event: any) => void) | null,
+    fluxDebounceTimer: null as ReturnType<typeof setTimeout> | null,
+    fluxQueuedMessages: [] as any[],
+    concurrencyQueue: [] as Array<() => void>,
+    concurrencyActive: 0,
+    concurrencyOriginal: null as typeof window.fetch | null,
 
     start() {
         if (settings.store.verboseLogging) logger.info("Starting optimizer suite");
@@ -347,6 +410,10 @@ export default definePlugin({
         if (settings.store.lazyEmbedImages) this.installLazyImages();
         if (settings.store.lazyIframes) this.installLazyIframes();
         if (settings.store.optimizeImageDecoding) this.installImageDecodingOptimization();
+        if (settings.store.disableAnimatedEmoji) this.installDisableAnimatedEmoji();
+        if (settings.store.suppressGifAutoplay) this.installSuppressGifAutoplay();
+        if (settings.store.debounceFluxMessages > 0) this.installFluxMessageDebounce();
+        if (settings.store.limitConcurrentRequests > 0) this.installConcurrencyLimit();
         this.installExtraCSS();
 
         if (settings.store.cacheLimitsEnabled) {
@@ -366,7 +433,6 @@ export default definePlugin({
         this.teardownConsolidatedObserver();
         this.teardownDomThrottle();
         this.restoreRafReduction();
-        this.restoreNetworkLayer();
         this.restoreSpringSkip();
         this.teardownMemoryManager();
         this.teardownOffscreenMediaPause();
@@ -379,6 +445,12 @@ export default definePlugin({
         this.teardownLazyIframes();
         this.teardownImageDecodingOptimization();
         this.teardownExtraCSS();
+        this.teardownDisableAnimatedEmoji();
+        this.teardownSuppressGifAutoplay();
+        this.teardownFluxMessageDebounce();
+
+        this.teardownConcurrencyLimit();
+        this.restoreNetworkLayer();
 
         this.networkCache.clear();
         this.networkCacheOrder.length = 0;
@@ -1095,6 +1167,17 @@ export default definePlugin({
                 "[class*=\"header_\"], [class*=\"banner_\"] { animation: none !important; transition: none !important; }"
             );
         }
+        if (settings.store.messageContentVisibility) {
+            rules.push(
+                "[class*=\"messageListItem_\"] { content-visibility: auto; contain-intrinsic-size: 90px; }",
+                "[class*=\"scrollerInner_\"] > [class*=\"divider\"] { contain-intrinsic-size: 0; }"
+            );
+        }
+        if (settings.store.suppressEmbedPreviews) {
+            rules.push(
+                "article[class*=\"embed_\"], [class*=\"embedWrapper_\"], [class*=\"embedFull_\"], [class*=\"embedInner_\"] { display: none !important; }"
+            );
+        }
 
         if (!rules.length) return;
         this.extraStyleEl = document.createElement("style");
@@ -1108,5 +1191,159 @@ export default definePlugin({
             this.extraStyleEl.remove();
             this.extraStyleEl = null;
         }
+    },
+
+    installDisableAnimatedEmoji() {
+        const rewrite = (img: HTMLImageElement) => {
+            const src = img.src || img.currentSrc;
+            if (!src) return;
+            if (!/\/(?:a_|[0-9]+\.gif)/.test(src)) return;
+            if (img.dataset.opEmojiStatic === "1") return;
+            img.dataset.opEmojiStatic = "1";
+            const staticSrc = src.replace(/\.gif(?:\?.*)?$/, ".webp").replace(/(\?.*)?$/, "?size=48&quality=lossless");
+            if (staticSrc !== src) img.src = staticSrc;
+        };
+
+        document.querySelectorAll<HTMLImageElement>("img[class*=\"emoji\"], img[src*=\"emojis\"]").forEach(rewrite);
+
+        this.animatedEmojiObserver = new MutationObserver(records => {
+            for (const r of records) {
+                for (const node of r.addedNodes) {
+                    if (!(node instanceof Element)) continue;
+                    if (node instanceof HTMLImageElement) {
+                        if (node.classList.contains("emoji") || node.src.includes("emojis")) rewrite(node);
+                    } else {
+                        node.querySelectorAll<HTMLImageElement>("img[class*=\"emoji\"], img[src*=\"emojis\"]").forEach(rewrite);
+                    }
+                }
+            }
+        });
+        this.animatedEmojiObserver.observe(document.body, { childList: true, subtree: true });
+    },
+
+    teardownDisableAnimatedEmoji() {
+        if (this.animatedEmojiObserver) {
+            this.animatedEmojiObserver.disconnect();
+            this.animatedEmojiObserver = null;
+        }
+    },
+
+    installSuppressGifAutoplay() {
+        const pause = (el: HTMLVideoElement | HTMLImageElement) => {
+            if (el.dataset.opGifSuppressed === "1") return;
+            const src = el.src || el.currentSrc;
+            if (!/\.gif|giphy|tenor|media\.discord/i.test(src) && !(el instanceof HTMLVideoElement)) return;
+            el.dataset.opGifSuppressed = "1";
+
+            if (el instanceof HTMLVideoElement && !el.paused) {
+                el.pause();
+                el.addEventListener("mouseenter", () => el.play().catch(() => undefined), { once: true });
+                el.addEventListener("mouseleave", () => el.pause(), { once: true });
+            }
+        };
+
+        document.querySelectorAll<HTMLVideoElement>("video[src*=\"gif\"], video[src*=\"media.discord\"]").forEach(pause);
+
+        this.gifAutoplayObserver = new MutationObserver(records => {
+            for (const r of records) {
+                for (const node of r.addedNodes) {
+                    if (!(node instanceof Element)) continue;
+                    if (node instanceof HTMLVideoElement && /gif|media\.discord/i.test(node.src)) pause(node);
+                    else node.querySelectorAll<HTMLVideoElement>("video[src*=\"gif\"], video[src*=\"media.discord\"]").forEach(pause);
+                }
+            }
+        });
+        this.gifAutoplayObserver.observe(document.body, { childList: true, subtree: true });
+    },
+
+    teardownSuppressGifAutoplay() {
+        if (this.gifAutoplayObserver) {
+            this.gifAutoplayObserver.disconnect();
+            this.gifAutoplayObserver = null;
+        }
+    },
+
+    installFluxMessageDebounce() {
+        const delay = settings.store.debounceFluxMessages;
+        if (delay <= 0) return;
+
+        try {
+            const { FluxDispatcher } = require("@webpack/common") as any;
+            if (!FluxDispatcher?.dispatch) return;
+
+            const original = FluxDispatcher.dispatch.bind(FluxDispatcher);
+            this.fluxDispatchOriginal = original;
+
+            const self = this;
+            FluxDispatcher.dispatch = function (event: any) {
+                if (event && event.type === "MESSAGE_CREATE") {
+                    self.fluxQueuedMessages.push(event);
+                    if (self.fluxDebounceTimer) clearTimeout(self.fluxDebounceTimer);
+                    self.fluxDebounceTimer = setTimeout(() => {
+                        self.fluxDebounceTimer = null;
+                        const batch = self.fluxQueuedMessages;
+                        self.fluxQueuedMessages = [];
+                        for (const e of batch) original(e);
+                    }, delay);
+                } else {
+                    original(event);
+                }
+            };
+        } catch (err) {
+            if (settings.store.verboseLogging) logger.warn("Failed to install flux message debounce", err);
+        }
+    },
+
+    teardownFluxMessageDebounce() {
+        if (this.fluxDebounceTimer !== null) {
+            clearTimeout(this.fluxDebounceTimer);
+            this.fluxDebounceTimer = null;
+        }
+        this.fluxQueuedMessages = [];
+        if (this.fluxDispatchOriginal) {
+            try {
+                const { FluxDispatcher } = require("@webpack/common") as any;
+                if (FluxDispatcher) FluxDispatcher.dispatch = this.fluxDispatchOriginal;
+            } catch { /* ignore */ }
+            this.fluxDispatchOriginal = null;
+        }
+    },
+
+    installConcurrencyLimit() {
+        const limit = settings.store.limitConcurrentRequests;
+        if (limit <= 0) return;
+
+        const originalFetch = window.fetch.bind(window);
+        this.concurrencyOriginal = window.fetch;
+        const queue = this.concurrencyQueue;
+
+        const dequeue = () => {
+            this.concurrencyActive--;
+            if (queue.length > 0 && this.concurrencyActive < limit) {
+                const next = queue.shift();
+                if (next) next();
+            }
+        };
+
+        window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+            if (this.concurrencyActive >= limit) {
+                return new Promise<Response>((resolve, reject) => {
+                    queue.push(() => {
+                        originalFetch(input, init).then(resolve, reject);
+                    });
+                });
+            }
+            this.concurrencyActive++;
+            return originalFetch(input, init).finally(() => dequeue());
+        }) as typeof window.fetch;
+    },
+
+    teardownConcurrencyLimit() {
+        if (this.concurrencyOriginal) {
+            window.fetch = this.concurrencyOriginal;
+            this.concurrencyOriginal = null;
+        }
+        this.concurrencyQueue.length = 0;
+        this.concurrencyActive = 0;
     }
 });

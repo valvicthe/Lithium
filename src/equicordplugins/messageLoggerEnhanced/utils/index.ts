@@ -118,72 +118,55 @@ const UserGuildSettingsStore = findStoreLazy("UserGuildSettingsStore");
 */
 export function shouldIgnore({ channelId, authorId, guildId, flags, bot, ghostPinged, isCachedByUs, webhookId }: ShouldIgnoreArguments): boolean {
     const isEphemeral = ((flags ?? 0) & EPHEMERAL) === EPHEMERAL;
-    if (isEphemeral) return true; // ignore
+    if (isEphemeral) return true;
 
     if (channelId && guildId == null)
         guildId = getGuildIdByChannel(channelId);
 
     const myId = UserStore.getCurrentUser().id;
     const { ignoreUsers, ignoreChannels, ignoreGuilds } = Settings.plugins.MessageLogger;
-    const { ignoreBots, ignoreSelf, ignoreWebhooks } = settings.store;
-
-    if (ignoreSelf && authorId === myId)
-        return true; // ignore
-    if (settings.store.alwaysLogDirectMessages && ChannelStore.getChannel(channelId ?? "-1")?.isDM?.())
-        return false; // keep
-
-    const shouldLogCurrentChannel = settings.store.alwaysLogCurrentChannel && SelectedChannelStore.getChannelId() === channelId;
-
-    const ids = [authorId, channelId, guildId];
-
-    const whitelistedIds = settings.store.whitelistedIds.split(",");
-
-    const isWhitelisted = settings.store.whitelistedIds.split(",").some(e => ids.includes(e));
-    const isAuthorWhitelisted = whitelistedIds.includes(authorId!);
-    const isChannelWhitelisted = whitelistedIds.includes(channelId!);
-    const isGuildWhitelisted = whitelistedIds.includes(guildId!);
-
-    const blacklistedIds = [
-        ...settings.store.blacklistedIds.split(","),
+    const { ignoreBots, ignoreSelf, ignoreWebhooks, whitelistedIds, blacklistedIds } = settings.store;
+    const whitelistArr = whitelistedIds.split(",");
+    const blacklistArr = [
+        ...blacklistedIds.split(","),
         ...(ignoreUsers ?? []).split(","),
         ...(ignoreChannels ?? []).split(","),
         ...(ignoreGuilds ?? []).split(",")
     ];
 
-    const isBlacklisted = blacklistedIds.some(e => ids.includes(e));
-    const isAuthorBlacklisted = blacklistedIds.includes(authorId);
-    const isChannelBlacklisted = blacklistedIds.includes(channelId);
+    if (ignoreSelf && authorId === myId)
+        return true;
+    if (settings.store.alwaysLogDirectMessages && ChannelStore.getChannel(channelId ?? "-1")?.isDM?.())
+        return false;
 
-    const shouldIgnoreMutedGuilds = settings.store.ignoreMutedGuilds;
-    const shouldIgnoreMutedCategories = settings.store.ignoreMutedCategories;
-    const shouldIgnoreMutedChannels = settings.store.ignoreMutedChannels;
+    const shouldLogCurrentChannel = settings.store.alwaysLogCurrentChannel && SelectedChannelStore.getChannelId() === channelId;
 
-    if ((ignoreBots && bot) && !isAuthorWhitelisted) return true; // ignore
+    const isAuthorWhitelisted = whitelistArr.includes(authorId!);
+    const isChannelWhitelisted = whitelistArr.includes(channelId!);
+    const isGuildWhitelisted = whitelistArr.includes(guildId!);
+    const ids = [authorId, channelId, guildId];
+    const isWhitelisted = whitelistArr.some(e => ids.includes(e));
+    const isAuthorBlacklisted = blacklistArr.includes(authorId);
+    const isChannelBlacklisted = blacklistArr.includes(channelId);
+    const isBlacklisted = blacklistArr.some(e => ids.includes(e));
 
+    if ((ignoreBots && bot) && !isAuthorWhitelisted) return true;
     if ((ignoreWebhooks && webhookId) && !isAuthorWhitelisted) return true;
+    if (ghostPinged) return false;
 
-    if (ghostPinged) return false; // keep
+    if (isAuthorWhitelisted) return false;
+    if (isAuthorBlacklisted) return true;
+    if (isChannelWhitelisted) return false;
+    if (isChannelBlacklisted) return true;
+    if (shouldLogCurrentChannel) return false;
+    if (isWhitelisted) return false;
+    if (isCachedByUs && (!settings.store.cacheMessagesFromServers && guildId != null && !isGuildWhitelisted)) return true;
+    if (isBlacklisted && (!isAuthorWhitelisted || !isChannelWhitelisted)) return true;
+    if (guildId != null && settings.store.ignoreMutedGuilds && UserGuildSettingsStore.isMuted(guildId)) return true;
+    if (channelId != null && settings.store.ignoreMutedCategories && UserGuildSettingsStore.isCategoryMuted(guildId, channelId)) return true;
+    if (channelId != null && settings.store.ignoreMutedChannels && UserGuildSettingsStore.isChannelMuted(guildId, channelId)) return true;
 
-    // author has highest priority
-    if (isAuthorWhitelisted) return false; // keep
-    if (isAuthorBlacklisted) return true; // ignore
-
-    if (isChannelWhitelisted) return false; // keep
-    if (isChannelBlacklisted) return true; // ignore
-
-    if (shouldLogCurrentChannel) return false; // keep
-
-    if (isWhitelisted) return false; // keep
-
-    if (isCachedByUs && (!settings.store.cacheMessagesFromServers && guildId != null && !isGuildWhitelisted)) return true; // ignore
-
-    if (isBlacklisted && (!isAuthorWhitelisted || !isChannelWhitelisted)) return true; // ignore
-
-    if (guildId != null && shouldIgnoreMutedGuilds && UserGuildSettingsStore.isMuted(guildId)) return true; // ignore
-    if (channelId != null && shouldIgnoreMutedCategories && UserGuildSettingsStore.isCategoryMuted(guildId, channelId)) return true; // ignore
-    if (channelId != null && shouldIgnoreMutedChannels && UserGuildSettingsStore.isChannelMuted(guildId, channelId)) return true; // ignore
-
-    return false; // keep;
+    return false;
 }
 
 export type ListType = "blacklistedIds" | "whitelistedIds";

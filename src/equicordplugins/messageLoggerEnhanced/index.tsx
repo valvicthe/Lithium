@@ -23,7 +23,7 @@ import * as LoggedMessageManager from "./LoggedMessageManager";
 import { addMessage } from "./LoggedMessageManager";
 import { settings } from "./settings";
 import { FetchMessagesResponse, LoadMessagePayload, LoggedMessage, LoggedMessageJSON, MessageCreatePayload, MessageDeleteBulkPayload, MessageDeletePayload, MessageUpdatePayload } from "./types";
-import { cleanUpCachedMessage, cleanupUserObject, getNative, isGhostPinged, mapTimestamp, messageJsonToMessageClass, reAddDeletedMessages } from "./utils";
+import { cleanUpCachedMessage, cleanupUserObject, clearMessageClassCache, getNative, isGhostPinged, mapTimestamp, messageJsonToMessageClass, reAddDeletedMessages } from "./utils";
 import { removeContextMenuBindings, setupContextMenuPatches } from "./utils/contextMenu";
 import { shouldIgnore } from "./utils/index";
 import { LimitedMap } from "./utils/LimitedMap";
@@ -423,7 +423,6 @@ export default definePlugin({
             const latestMessage = this.oldGetMessage(channelId, messageId);
 
             // Reuse cached merged object when message hasn't been edited
-            // This gives messageJsonToMessageClass's memoize a stable reference
             const cached = mergedMessageCache.get(messageId);
             if (cached) {
                 const latestEditTS = latestMessage?.editedTimestamp?.valueOf?.() ?? 0;
@@ -459,6 +458,7 @@ export default definePlugin({
 
     stop() {
         removeContextMenuBindings();
+        clearMessageClassCache();
         MessageStore.getMessage = this.oldGetMessage;
         mergedMessageCache.clear();
         mergedEditTimestamps.clear();

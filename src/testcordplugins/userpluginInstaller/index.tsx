@@ -16,6 +16,7 @@ import { findByPropsLazy, findComponentByCodeLazy } from "@webpack";
 import SettingsTab from "./components/SettingsTab";
 import UserpluginInstallButton from "./components/UserpluginInstallButton";
 import { VariableWithCallbacks } from "./VariableWithCallbacks";
+import { CLONE_LINK_REGEX } from "./misc/constants";
 
 // @ts-ignore
 export const Native = VencordNative.pluginHelpers.UserpluginInstaller as PluginNative<typeof import("./native")>;
@@ -106,6 +107,8 @@ export default definePlugin({
     settings,
     authors: [Devs.nin0dev],
     renderMessageAccessory: props => {
+        if (!props?.message?.content) return null;
+        if (!CLONE_LINK_REGEX.test(props.message.content)) return null;
         return <UserpluginInstallButton props={props} />;
     }
 });

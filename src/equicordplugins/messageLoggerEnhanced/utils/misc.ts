@@ -24,8 +24,6 @@ import { DBMessageStatus } from "../db";
 import { LoggedMessageJSON } from "../types";
 import { DEFAULT_ATTACHMENT_FILE_EXTENSIONS, DEFAULT_IMAGE_CACHE_DIR } from "./constants";
 import { DISCORD_EPOCH } from "./index";
-import { memoize } from "./memoize";
-
 const MessageClass: any = findLazy(m => m?.prototype?.isEdited);
 const AuthorClass = findLazy(m => m?.prototype?.getAvatarURL);
 const sanitizeEmbed = findByCodeLazy('"embed_"),');
@@ -93,9 +91,18 @@ export const mapTimestamp = (m: any) => {
     return m;
 };
 
-export const messageJsonToMessageClass = memoize((log: { message: LoggedMessageJSON; }) => {
-    // console.time("message populate");
+const messageClassCache = new Map<string, any>();
+
+export function clearMessageClassCache() {
+    messageClassCache.clear();
+}
+
+export function messageJsonToMessageClass(log: { message: LoggedMessageJSON; }) {
     if (!log?.message) return null;
+
+    const id = log.message.id;
+    const cached = messageClassCache.get(id);
+    if (cached) return cached;
 
     const message: any = new MessageClass(log.message);
     message.timestamp = getTimestamp(message.timestamp);
@@ -121,9 +128,9 @@ export const messageJsonToMessageClass = memoize((log: { message: LoggedMessageJ
     if (message.messageSnapshots)
         message.messageSnapshots.map(m => mapTimestamp(m.message));
 
-    // console.timeEnd("message populate");
+    messageClassCache.set(id, message);
     return message;
-});
+}
 
 export function parseJSON(json?: string | null) {
     try {

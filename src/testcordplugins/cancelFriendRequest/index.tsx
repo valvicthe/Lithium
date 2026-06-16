@@ -113,12 +113,13 @@ export default definePlugin({
     authors: [{ name: "Nightcord", id: 0n }],
 
     start() {
-        observer = new MutationObserver(mutations => {
-            for (const m of mutations) {
-                for (const node of m.addedNodes) {
-                    if (node instanceof HTMLElement) scan(node);
-                }
-            }
+        let scanTimer: ReturnType<typeof setTimeout> | null = null;
+        observer = new MutationObserver(() => {
+            if (scanTimer) return;
+            scanTimer = setTimeout(() => {
+                scanTimer = null;
+                scan(document);
+            }, 300);
         });
         observer.observe(document.body, { childList: true, subtree: true });
         scan(document);

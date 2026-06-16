@@ -402,7 +402,14 @@ function tryInject(): void {
 let observer: MutationObserver | null = null;
 
 function startObserver(): void {
-    observer = new MutationObserver(() => tryInject());
+    let injectTimer: ReturnType<typeof setTimeout> | null = null;
+    observer = new MutationObserver(() => {
+        if (injectTimer) return;
+        injectTimer = setTimeout(() => {
+            injectTimer = null;
+            tryInject();
+        }, 300);
+    });
     observer.observe(document.body, { childList: true, subtree: true });
     tryInject();
 }
