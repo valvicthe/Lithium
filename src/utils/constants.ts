@@ -1434,6 +1434,10 @@ export const TestcordDevs = /* #__PURE__*/ Object.freeze({
     racify: {
         name: "racify",
         id: 1186067973547495498n
+    },
+    mixi: {
+        name: "mixi",
+        id: 1517005377214873672n
     }
 } satisfies Record<string, Dev>);
 
