@@ -1,5 +1,6 @@
 import definePlugin from "@utils/types";
 import { filters, find } from "@webpack";
+import { FluxDispatcher } from "@webpack/common";
 
 export default definePlugin({
     name: "AgeVerificationBypass",
@@ -97,8 +98,10 @@ export default definePlugin({
         };
 
         applyMasterMask();
-        const interval = setInterval(applyMasterMask, 500); 
-        (this as any)._interval = interval;
+        const reapply = () => applyMasterMask();
+        (this as any)._reapply = reapply;
+        FluxDispatcher.subscribe("USER_UPDATE", reapply);
+        FluxDispatcher.subscribe("CONNECTION_OPEN", reapply);
 
         if (StageStore) {
             const origIsStageSpeakerAllowed = StageStore.isStageSpeakerAllowed;
@@ -143,7 +146,12 @@ export default definePlugin({
     },
 
     stop() {
-        if ((this as any)._interval) clearInterval((this as any)._interval);
+        const reapply = (this as any)._reapply;
+        if (reapply) {
+            FluxDispatcher.unsubscribe("USER_UPDATE", reapply);
+            FluxDispatcher.unsubscribe("CONNECTION_OPEN", reapply);
+            (this as any)._reapply = null;
+        }
         const restores: Array<() => void> = (this as any)._patchRestores || [];
         while (restores.length) {
             const restore = restores.pop();
