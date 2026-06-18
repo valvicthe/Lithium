@@ -399,6 +399,26 @@ function onConnection(connection: any) {
             }
             return resConstraints;
         };
+
+        // The engine recomputes quality on encoder/bandwidth feedback and pushes
+        // a fresh quality object via setQuality, which otherwise clobbers the
+        // values stamped by the getters above. Re-stamp on every recompute so our
+        // settings survive renegotiation rather than only applying at connect.
+        if (typeof vqm.setQuality === "function") {
+            const oldSetQuality = vqm.setQuality;
+            vqm.setQuality = function (this: any, quality: any, ...rest: any[]) {
+                if (quality && typeof quality === "object") {
+                    if (s.resolutionEnabled) {
+                        quality.width = res.width;
+                        quality.height = res.height;
+                    }
+                    if (s.fpsEnabled) {
+                        quality.framerate = s.fps;
+                    }
+                }
+                return oldSetQuality.apply(this, [quality, ...rest]);
+            };
+        }
     }
 
     const forceEngineSettings = () => {
