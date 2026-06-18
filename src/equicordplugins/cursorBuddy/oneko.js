@@ -196,13 +196,15 @@ export default function oneko(options = {}) {
 
         document.body.appendChild(nekoEl);
 
-        document.addEventListener("mousemove", function (event) {
+        const moveListener = function (event) {
             mousePosX = event.clientX;
             mousePosY = event.clientY;
-        });
+        };
+        document.addEventListener("mousemove", moveListener);
 
+        let unloadListener = null;
         if (persistPosition) {
-            window.addEventListener("beforeunload", function (event) {
+            unloadListener = function (event) {
                 window.localStorage.setItem(
                     "oneko",
                     JSON.stringify({
@@ -217,10 +219,17 @@ export default function oneko(options = {}) {
                         bgPos: nekoEl.style.backgroundPosition,
                     })
                 );
-            });
+            };
+            window.addEventListener("beforeunload", unloadListener);
         }
 
-        window.requestAnimationFrame(onAnimationFrame);
+        const rafId = window.requestAnimationFrame(onAnimationFrame);
+
+        return function cleanup() {
+            document.removeEventListener("mousemove", moveListener);
+            if (unloadListener) window.removeEventListener("beforeunload", unloadListener);
+            cancelAnimationFrame(rafId);
+        };
     }
 
     let lastFrameTimestamp;
@@ -334,5 +343,5 @@ export default function oneko(options = {}) {
         nekoEl.style.top = `${nekoPosY - 16}px`;
     }
 
-    init();
+    return init();
 }

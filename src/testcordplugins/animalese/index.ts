@@ -148,14 +148,14 @@ export default definePlugin({
 
     start() {
         // Only subscribe once!
-        const init = async () => {
+        this._clickInit = async () => {
             if (!audioContext) {
                 audioContext = new AudioContext();
                 await initSoundBuffers();
             }
-            document.removeEventListener("click", init);
+            document.removeEventListener("click", this._clickInit);
         };
-        document.addEventListener("click", init);
+        document.addEventListener("click", this._clickInit);
 
         this.channelSelectListener = ({ channelId }) => {
             currentChannelId = channelId;
@@ -185,6 +185,8 @@ export default definePlugin({
     },
 
     stop() {
+        document.removeEventListener("click", this._clickInit);
+        delete this._clickInit;
         FluxDispatcher.unsubscribe(
             "CHANNEL_SELECT",
             this.channelSelectListener

@@ -214,8 +214,10 @@ function createAlertButton() {
     document.head.appendChild(style);
 
     // Two-stage click handler
-    button.addEventListener("click", () => {
-        if (!alertSoundStopped) {
+    let firstClick = true;
+    button._alertClickHandler = () => {
+        if (firstClick) {
+            firstClick = false;
             // ── FIRST CLICK: stop sound only ──────────────────────────────
             alertSoundStopped = true;
 
@@ -246,7 +248,8 @@ function createAlertButton() {
             // ── SECOND CLICK: dismiss and resume ─────────────────────────
             stopAlert();
         }
-    });
+    };
+    button.addEventListener("click", button._alertClickHandler);
 
     document.body.appendChild(button);
     alertButton = button;
@@ -255,6 +258,10 @@ function createAlertButton() {
 
 function removeAlertButton() {
     if (alertButton) {
+        if (alertButton._alertClickHandler) {
+            alertButton.removeEventListener("click", alertButton._alertClickHandler);
+            delete alertButton._alertClickHandler;
+        }
         alertButton.remove();
         alertButton = null;
     }

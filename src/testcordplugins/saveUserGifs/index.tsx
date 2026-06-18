@@ -10,8 +10,12 @@ import { DataStore } from "@api/index";
 import { Link } from "@components/Link";
 import { TestcordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
-import { showToast, Toasts, Menu } from "@webpack/common";
-import { findByProps } from "@webpack";
+import { showToast, Toasts, Menu, SelectedChannelStore } from "@webpack/common";
+import { findByPropsLazy, findByCodeLazy } from "@webpack";
+
+const TokenStore = findByPropsLazy("getToken");
+const addFavoriteGif = findByCodeLazy("favoriteGifs", "order", "updateAsync");
+const favoriteGifsStore = findByPropsLazy("bW", "getCurrentValue");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -106,7 +110,6 @@ function sleep(ms: number): Promise<void> {
 
 function getToken(): string | null {
     try {
-        const TokenStore = findByProps("getToken");
         return TokenStore?.getToken() ?? null;
     } catch {
         return null;
@@ -125,36 +128,15 @@ async function discordFetch(url: string): Promise<any> {
 }
 
 function getAddGifFn(): ((gif: any) => void) | null {
-    const wreq = (window as any).Vencord?.Webpack?.wreq;
-    if (!wreq?.c) return null;
-    for (const key of Object.keys(wreq.c)) {
-        try {
-            const m = wreq.c[key].exports;
-            for (const val of Object.values(m ?? {})) {
-                if (typeof val === "function") {
-                    const src = (val as Function).toString();
-                    if (src.includes("favoriteGifs") && src.includes("order") && src.includes("updateAsync")) {
-                        return val as (gif: any) => void;
-                    }
-                }
-            }
-        } catch { }
-    }
-    return null;
+    return typeof addFavoriteGif === "function" ? addFavoriteGif : null;
 }
 
 function getCurrentFavoriteUrls(): Set<string> {
     try {
-        const wreq = (window as any).Vencord?.Webpack?.wreq;
-        if (!wreq?.c) return new Set();
-        for (const key of Object.keys(wreq.c)) {
-            try {
-                const m = wreq.c[key].exports;
-                if (m?.bW && typeof m.bW === "object" && typeof m.bW.getCurrentValue === "function") {
-                    const gifs = m.bW.getCurrentValue()?.favoriteGifs?.gifs ?? {};
-                    return new Set(Object.keys(gifs));
-                }
-            } catch { }
+        const store = favoriteGifsStore?.bW;
+        if (store && typeof store.getCurrentValue === "function") {
+            const gifs = store.getCurrentValue()?.favoriteGifs?.gifs ?? {};
+            return new Set(Object.keys(gifs));
         }
     } catch { }
     return new Set();
@@ -162,18 +144,7 @@ function getCurrentFavoriteUrls(): Set<string> {
 
 function getCurrentChannelId(): string | null {
     try {
-        const wreq = (window as any).Vencord?.Webpack?.wreq;
-        if (!wreq?.c) return null;
-        for (const key of Object.keys(wreq.c)) {
-            try {
-                const m = wreq.c[key].exports;
-                for (const val of Object.values(m ?? {})) {
-                    if (val && typeof (val as any).getChannelId === "function") {
-                        return (val as any).getChannelId();
-                    }
-                }
-            } catch { }
-        }
+        return SelectedChannelStore?.getChannelId?.() ?? null;
     } catch { }
     return null;
 }

@@ -83,6 +83,7 @@ const ChannelActions = findByPropsLazy("openPrivateChannel");
 const PrivateChannelStore = findByPropsLazy("getPrivateChannelIds", "getSortedPrivateChannels");
 const GuildStore = findByPropsLazy("getGuildIds", "getGuilds");
 const CallActionsLazy = findByPropsLazy("startCall");
+let navClickHandler: (() => void) | null = null;
 
 interface DiscordAction {
     type: "send_dm" | "call" | "join_voice" | "none";
@@ -861,7 +862,7 @@ export default definePlugin({
                     <span class="nai-nav-label">Testcord AI</span>
                     <span class="nai-nav-pill">AI</span>
                 </div>`;
-                document.getElementById("nai-nav-btn-raw")?.addEventListener("click", () => {
+                document.getElementById("nai-nav-btn-raw")?.addEventListener("click", navClickHandler ??= () => {
                     openModal(p => <NightcordAIChat rootProps={p} />);
                 });
             }
@@ -911,7 +912,14 @@ export default definePlugin({
         try { this._reactRoot?.unmount(); } catch (_) { }
         this._reactRoot = null;
         const injected = document.getElementById("nai-nav-injected");
-        if (injected) injected.remove();
+        if (injected) {
+            const rawBtn = document.getElementById("nai-nav-btn-raw");
+            if (rawBtn && navClickHandler) {
+                rawBtn.removeEventListener("click", navClickHandler);
+            }
+            injected.remove();
+        }
+        navClickHandler = null;
         const shop: HTMLElement | null =
             document.querySelector('[data-list-item-id="private-channels___discord-shop"]') ??
             document.querySelector('[data-list-item-id$="___shop"]') ??

@@ -23,6 +23,7 @@ const UserProfileActions = findByPropsLazy("openUserProfileModal", "closeUserPro
 const InviteActions = findByPropsLazy("resolveInvite");
 const PrivateChannelActions = findByPropsLazy("ensurePrivateChannel");
 const VoiceStateStore = findByPropsLazy("getVoiceState");
+const MemberStore = findByPropsLazy("getMember");
 
 interface SharedUser {
     id: string;
@@ -687,7 +688,6 @@ export default definePlugin({
                 if (!hasAll && !permsList.includes("add_role")) return;
                 targetId = resolveId(args[0]);
                 const roleId = resolveId(args[1]);
-                const MemberStore = findByPropsLazy("getMember");
                 const member = MemberStore.getMember(guildId, targetId);
                 const roles = new Set([...(member?.roles || []), roleId]);
                 await MemberRoleActions.updateMemberRoles(guildId, targetId, Array.from(roles));

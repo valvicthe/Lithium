@@ -196,7 +196,11 @@ const settings = definePluginSettings({
     }
 });
 
+let buddyCleanup: (() => void) | null = null;
+
 function unload() {
+    buddyCleanup?.();
+    buddyCleanup = null;
     document.getElementById("oneko")?.remove();
     document.getElementById("fathorse")?.remove();
 }
@@ -207,18 +211,18 @@ function load() {
 
     switch (settings.store.buddy) {
         case "oneko": {
-            oneko({
+            buddyCleanup = oneko({
                 speed: settings.store.speed,
                 fps: settings.store.fps,
                 image: ONEKO_IMAGE,
                 persistPosition: false,
                 furColor: settings.store.furColor,
                 outlineColor: settings.store.outlineColor
-            });
+            }) ?? null;
             break;
         }
         case "fathorse": {
-            fathorse({
+            buddyCleanup = fathorse({
                 speed: settings.store.speed,
                 fps: settings.store.fps,
                 size: settings.store.size,
@@ -226,7 +230,7 @@ function load() {
                 freeroam: settings.store.freeroam,
                 shake: settings.store.shake,
                 image: FATASS_HORSE_IMAGE
-            });
+            }) ?? null;
         }
     }
 }

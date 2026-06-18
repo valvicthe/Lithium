@@ -183,7 +183,11 @@ function startObserver() {
 function stopObserver() {
     observer?.disconnect();
     observer = null;
-    document.getElementById(MOUNT_ID)?.remove();
+    const mount = document.getElementById(MOUNT_ID);
+    if (mount) {
+        mount.querySelectorAll("button").forEach(btn => btn.removeEventListener("click", onLoginButtonClick));
+        mount.remove();
+    }
 }
 
 export default definePlugin({
