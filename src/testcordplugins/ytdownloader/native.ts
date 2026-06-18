@@ -109,9 +109,16 @@ function ffmpeg(ctx: RunContext, args: string[]): Promise<string> {
 }
 
 export async function start(_: IpcMainInvokeEvent, _workdir: string | undefined) {
-    _workdir ||= fs.mkdtempSync(path.join(os.tmpdir(), "vencord_YTdownloader_"));
-    if (!fs.existsSync(_workdir)) fs.mkdirSync(_workdir, { recursive: true });
-    workdir = _workdir;
+    try {
+        _workdir ||= fs.mkdtempSync(path.join(os.tmpdir(), "vencord_YTdownloader_"));
+        if (!fs.existsSync(_workdir)) fs.mkdirSync(_workdir, { recursive: true });
+        workdir = _workdir;
+    } catch {
+        // Configured downloadFolder may be unwritable (EACCES/EPERM) or the
+        // tmpdir got cleaned mid-run. Fall back to a fresh temp dir so the
+        // plugin still starts instead of throwing through IPC.
+        workdir = fs.mkdtempSync(path.join(os.tmpdir(), "vencord_YTdownloader_"));
+    }
     console.log(`[Plugin:YTdownloader] Using workdir: ${workdir}`);
     return workdir;
 }
