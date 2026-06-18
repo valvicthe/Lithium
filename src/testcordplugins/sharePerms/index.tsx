@@ -6,7 +6,7 @@
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByPropsLazy } from "@webpack";
-import { FluxDispatcher, React, showToast, Toasts, UserStore, RelationshipStore, GuildStore, ChannelStore, Forms, Button, Text, SearchableSelect, TextInput, Avatar, IconUtils, RestAPI, ChannelActionCreators, Select, ScrollerThin } from "@webpack/common";
+import { FluxDispatcher, React, showToast, Toasts, UserStore, RelationshipStore, GuildStore, ChannelStore, Forms, Button, Text, SearchableSelect, TextInput, Avatar, IconUtils, RestAPI, ChannelActionCreators, Select, ScrollerThin, useMemo } from "@webpack/common";
 import { sendBotMessage } from "@api/Commands";
 import { addHeaderBarButton, HeaderBarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { openModal, ModalRoot, ModalContent, ModalHeader, ModalCloseButton } from "@utils/modal";
@@ -148,18 +148,15 @@ function SharePermsModal({ rootProps }: { rootProps: any; }) {
     const [newDuration, setNewDuration] = React.useState("1d");
     const [newMaxUses, setNewMaxUses] = React.useState("0"); // 0 = unlimited
     const [newPerms, setNewPerms] = React.useState<string[]>(["all"]);
-    const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+    const [now, setNow] = React.useState(Date.now());
 
     React.useEffect(() => {
-        const timer = setInterval(() => {
-            forceUpdate();
-            setLogs(getLogs());
-        }, 1000);
+        const timer = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(timer);
     }, []);
 
-    const friends = RelationshipStore.getFriendIDs().map((id: string) => UserStore.getUser(id)).filter(Boolean);
-    const guilds = Object.values(GuildStore.getGuilds());
+    const friends = useMemo(() => RelationshipStore.getFriendIDs().map((id: string) => UserStore.getUser(id)).filter(Boolean), []);
+    const guilds = useMemo(() => Object.values(GuildStore.getGuilds()), []);
 
     const addUser = async () => {
         if (newUserIds.length === 0 || !newGuildId) return;
@@ -428,7 +425,7 @@ function SharePermsModal({ rootProps }: { rootProps: any; }) {
                     ) : users.map((u, index) => {
                         const user = UserStore.getUser(u.id);
                         const duration = parseDuration(u.validUntil);
-                        const timeLeft = duration ? Math.max(0, u.startTime + duration - Date.now()) : Infinity;
+                        const timeLeft = duration ? Math.max(0, u.startTime + duration - now) : Infinity;
 
                         return (
                             <div key={`${u.id}-${index}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12, background: "var(--background-secondary)", borderRadius: 8, marginBottom: 10 }}>
