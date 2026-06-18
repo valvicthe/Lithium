@@ -1452,7 +1452,7 @@ export default definePlugin({
 
         document.querySelectorAll<HTMLImageElement>("img[class*=\"emoji\"], img[src*=\"emojis\"]").forEach(rewrite);
 
-        this.animatedEmojiObserver = new MutationObserver(records => {
+        const callback = (records: MutationRecord[]) => {
             for (const r of records) {
                 for (const node of r.addedNodes) {
                     if (!(node instanceof Element)) continue;
@@ -1463,11 +1463,18 @@ export default definePlugin({
                     }
                 }
             }
-        });
-        this.animatedEmojiObserver.observe(document.body, { childList: true, subtree: true });
+        };
+
+        if (this.consolidatedObserver) {
+            this.observerCallbacks.set("disableAnimatedEmoji", callback);
+        } else {
+            this.animatedEmojiObserver = new MutationObserver(callback);
+            this.animatedEmojiObserver.observe(document.body, { childList: true, subtree: true });
+        }
     },
 
     teardownDisableAnimatedEmoji() {
+        this.observerCallbacks.delete("disableAnimatedEmoji");
         if (this.animatedEmojiObserver) {
             this.animatedEmojiObserver.disconnect();
             this.animatedEmojiObserver = null;
@@ -1490,7 +1497,7 @@ export default definePlugin({
 
         document.querySelectorAll<HTMLVideoElement>("video[src*=\"gif\"], video[src*=\"media.discord\"]").forEach(pause);
 
-        this.gifAutoplayObserver = new MutationObserver(records => {
+        const callback = (records: MutationRecord[]) => {
             for (const r of records) {
                 for (const node of r.addedNodes) {
                     if (!(node instanceof Element)) continue;
@@ -1498,11 +1505,18 @@ export default definePlugin({
                     else node.querySelectorAll<HTMLVideoElement>("video[src*=\"gif\"], video[src*=\"media.discord\"]").forEach(pause);
                 }
             }
-        });
-        this.gifAutoplayObserver.observe(document.body, { childList: true, subtree: true });
+        };
+
+        if (this.consolidatedObserver) {
+            this.observerCallbacks.set("suppressGifAutoplay", callback);
+        } else {
+            this.gifAutoplayObserver = new MutationObserver(callback);
+            this.gifAutoplayObserver.observe(document.body, { childList: true, subtree: true });
+        }
     },
 
     teardownSuppressGifAutoplay() {
+        this.observerCallbacks.delete("suppressGifAutoplay");
         if (this.gifAutoplayObserver) {
             this.gifAutoplayObserver.disconnect();
             this.gifAutoplayObserver = null;
