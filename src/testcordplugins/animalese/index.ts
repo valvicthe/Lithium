@@ -175,7 +175,7 @@ export default definePlugin({
             }
 
             try {
-                const buffer = await generateAnimalese(message.content);
+                const buffer = await generateAnimalese(message.content.slice(0, 200));
                 await playSound(buffer, settings.store.volume);
             } catch (err) {
                 console.error("[Animalese]", err);
