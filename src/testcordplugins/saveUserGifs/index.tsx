@@ -64,7 +64,6 @@ const settings = definePluginSettings({
 
 let isScanning = false;
 let currentGifsFound = 0;
-    const savePromises: Promise<void>[] = [];
 let stopRequested = false;
 
 
@@ -90,6 +89,33 @@ async function addToHeartGifs(gif: GifEntry): Promise<boolean> {
         return true;
     } catch {
         return false;
+    }
+}
+
+async function addToHeartGifsBatch(gifs: GifEntry[]): Promise<number> {
+    if (gifs.length === 0) return 0;
+    try {
+        const items: any[] = (await DataStore.get(HG_DATA_KEY)) ?? [];
+        const existingUrls = new Set(items.map((g: any) => g.url));
+        let added = 0;
+        for (const gif of gifs) {
+            if (existingUrls.has(gif.url)) continue;
+            existingUrls.add(gif.url);
+            items.unshift({
+                id: "nogl-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9),
+                url: gif.url,
+                src: gif.src || gif.url,
+                width: gif.width || 498,
+                height: gif.height || 280,
+                type: "gif",
+                addedAt: Date.now(),
+            });
+            added++;
+        }
+        if (added > 0) await DataStore.set(HG_DATA_KEY, items);
+        return added;
+    } catch {
+        return 0;
     }
 }
 
@@ -274,13 +300,14 @@ async function scanUserGifs(userId: string, username: string, guildId: string | 
     const favUrls = !useHeartGifs ? getCurrentFavoriteUrls() : new Set<string>();
     const savedRealtime = new Set<string>();
 
+    const heartGifsPending: GifEntry[] = [];
+
     const onGifFound = (saveMode === "favorites" || saveMode === "both")
         ? (useHeartGifs
             ? (g: GifEntry) => {
-                // Save to HeartGifs (async, fire-and-forget with tracking)
                 if (!savedRealtime.has(g.url)) {
                     savedRealtime.add(g.url);
-                    addToHeartGifs(g).catch(() => { });
+                    heartGifsPending.push(g);
                 }
             }
             : (addGif
@@ -308,10 +335,10 @@ async function scanUserGifs(userId: string, username: string, guildId: string | 
         allGifs.push(...found);
     }
 
-    // Wait for all pending confirmations before reporting
-    if (savePromises.length > 0) {
-        showToast("Verifying saved GIFs...", Toasts.Type.MESSAGE);
-        await Promise.all(savePromises);
+    // Batch-write HeartGifs after scan (single read+write instead of per-GIF)
+    if (heartGifsPending.length > 0) {
+        showToast("Saving HeartGifs...", Toasts.Type.MESSAGE);
+        await addToHeartGifsBatch(heartGifsPending);
     }
 
     isScanning = false;
