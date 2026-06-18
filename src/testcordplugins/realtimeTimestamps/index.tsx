@@ -76,23 +76,50 @@ function useGlobalTick() {
 
 // ─── Renderers called by the patches ─────────────────────────────────────────
 
-function renderTimestamp(date: Date, type: "cozy" | "compact" | "tooltip"): string {
-    useGlobalTick();
+// Formatted output is identical for every timestamp that lands in the same
+// second with the same settings, so cache by second + the settings that affect
+// the string. On a busy guild this turns N moment().format() calls per tick
+// into one per unique second, while keeping the same string return type the
+// patch sites depend on. Bounded so it can't grow without limit.
+const formatCache = new Map<string, string>();
+const FORMAT_CACHE_MAX = 512;
 
-    const fmt = settings.store.format ?? "HH:mm:ss";
+function formatCached(date: Date, type: "cozy" | "compact" | "tooltip", fmt: string): string {
+    const { showInCompact, showInTooltip } = settings.store;
+    const second = Math.floor(date.getTime() / 1000);
+    const key = `${type}|${second}|${fmt}|${showInCompact ? 1 : 0}|${showInTooltip ? 1 : 0}`;
 
+    const cached = formatCache.get(key);
+    if (cached !== undefined) return cached;
+
+    let out: string;
     switch (type) {
         case "cozy":
-            return moment(date).format(fmt);
+            out = moment(date).format(fmt);
+            break;
         case "compact":
-            return settings.store.showInCompact
-                ? moment(date).format(fmt)
-                : moment(date).format("LT");
+            out = showInCompact ? moment(date).format(fmt) : moment(date).format("LT");
+            break;
         case "tooltip":
-            return settings.store.showInTooltip
+            out = showInTooltip
                 ? moment(date).format(`dddd, MMMM D, YYYY [at] ${fmt}`)
                 : moment(date).format("LLLL");
+            break;
     }
+
+    if (formatCache.size >= FORMAT_CACHE_MAX) {
+        const oldest = formatCache.keys().next().value;
+        if (oldest !== undefined) formatCache.delete(oldest);
+    }
+    formatCache.set(key, out);
+    return out;
+}
+
+function renderTimestamp(date: Date, type: "cozy" | "compact" | "tooltip"): string {
+    if (type !== "tooltip") useGlobalTick();
+
+    const fmt = settings.store.format ?? "HH:mm:ss";
+    return formatCached(date, type, fmt);
 }
 
 // ─── Plugin ──────────────────────────────────────────────────────────────────
