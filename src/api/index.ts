@@ -22,6 +22,7 @@ import * as $ChatButtons from "./ChatButtons";
 import * as $Commands from "./Commands";
 import * as $ContextMenu from "./ContextMenu";
 import * as $DataStore from "./DataStore";
+import * as $GifPickerContextMenu from "./GifPickerContextMenu";
 import * as $HeaderBar from "./HeaderBar";
 import * as $MemberListDecorators from "./MemberListDecorators";
 import * as $MessageAccessories from "./MessageAccessories";
@@ -185,6 +186,7 @@ export const ProfileCollections = $ProfileCollections;
 export const ProfileSections = $ProfileSections;
 
 /**
+/**
  * An API allowing you to run plugin code in a separate thread
  * via Web Workers. Prevents heavy computation from lagging Discord's UI.
  *
@@ -203,3 +205,9 @@ export const ProfileSections = $ProfileSections;
  * worker.terminate();
  */
 export const PluginWorker = $PluginWorker;
+
+/**
+ * An API allowing plugins to add items to the GIF picker right-click context menu
+ * without conflicting with each other.
+ */
+export const GifPickerContextMenu = $GifPickerContextMenu;

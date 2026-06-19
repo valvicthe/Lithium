@@ -41,6 +41,7 @@ import Plugins from "~plugins";
 export { Plugins as plugins };
 
 import { addAudioProcessor, removeAudioProcessor } from "./AudioPlayer";
+import { addGifPickerContextMenuPatch, removeGifPickerContextMenuPatch } from "./GifPickerContextMenu";
 import { addChannelToolbarButton, addHeaderBarButton, removeChannelToolbarButton, removeHeaderBarButton } from "./HeaderBar";
 import { addProfileCollection, removeProfileCollection } from "./ProfileCollections";
 import { addProfileSection, removeProfileSection } from "./ProfileSections";
@@ -228,7 +229,7 @@ export const startPlugin = traceFunction("startPlugin", function startPlugin(p: 
         renderChatBarButton,
         // Custom
         renderNicknameIcon, headerBarButton, audioProcessor, userAreaButton, renderProfileCollection, chatBarButtonWrapper,
-        renderProfileSection
+        renderProfileSection, gifPickerContextMenu
     } = p;
 
     if (p.start) {
@@ -299,6 +300,7 @@ export const startPlugin = traceFunction("startPlugin", function startPlugin(p: 
     if (renderProfileCollection) addProfileCollection(name, renderProfileCollection.render, renderProfileCollection.priority);
     if (chatBarButtonWrapper) addChatBarButtonWrapper(name, chatBarButtonWrapper.wrapper, chatBarButtonWrapper.priority);
     if (renderProfileSection) addProfileSection(name, renderProfileSection.render, renderProfileSection.priority);
+    if (gifPickerContextMenu) addGifPickerContextMenuPatch(name, gifPickerContextMenu);
 
     return true;
 }, p => `startPlugin ${p.name}`);
@@ -311,7 +313,7 @@ export const stopPlugin = traceFunction("stopPlugin", function stopPlugin(p: Plu
         renderChatBarButton,
         // Custom
         renderNicknameIcon, headerBarButton, audioProcessor, userAreaButton, renderProfileCollection, chatBarButtonWrapper,
-        renderProfileSection
+        renderProfileSection, gifPickerContextMenu
     } = p;
 
     if (p.stop) {
@@ -384,6 +386,7 @@ export const stopPlugin = traceFunction("stopPlugin", function stopPlugin(p: Plu
     if (renderProfileCollection) removeProfileCollection(name);
     if (chatBarButtonWrapper) removeChatBarButtonWrapper(name);
     if (renderProfileSection) removeProfileSection(name);
+    if (gifPickerContextMenu) removeGifPickerContextMenuPatch(name);
 
     return true;
 }, p => `stopPlugin ${p.name}`);
@@ -442,6 +445,7 @@ export const initPluginManager = onlyOnce(function init() {
         if (p.renderProfileCollection) neededApiPlugins.add("ProfileCollectionsAPI");
         if (p.chatBarButtonWrapper) neededApiPlugins.add("ChatInputButtonAPI");
         if (p.renderProfileSection) neededApiPlugins.add("ProfileSectionsAPI");
+        if (p.gifPickerContextMenu) neededApiPlugins.add("ExtraContextMenusAPI");
 
         for (const key of pluginKeysToBind) {
             p[key] &&= (p[key] as Function).bind(p) as any;
