@@ -254,7 +254,7 @@ function StereoInstallerPanel() {
                     {isMethod2 ? (
                         <>
                             <Paragraph>
-                                This will use the local {method2Quality} file from StereoMethods/Discord-Voice, rename it to discord_voice.node, and copy it into <code>{"modules\\discord_voice-1\\discord_voice"}</code>.
+                                This will download the Voice Playground Method file ({method2Quality} kbps) from the upstream source, rename it to discord_voice.node, and copy it into <code>{"modules\\discord_voice-1\\discord_voice"}</code>.
                             </Paragraph>
                             <Paragraph>
                                 Voice Playground Method replaces the local voice module to enable higher audio quality. Use only one method on the same Discord install.
@@ -285,7 +285,7 @@ function StereoInstallerPanel() {
             body: (
                 <div>
                     <Paragraph>
-                        This will copy index.js from StereoMethods/Discord-Voice into <code>{"modules\\discord_voice-1\\discord_voice"}</code>.
+                        This will download index.js from the Voice Playground source into <code>{"modules\\discord_voice-1\\discord_voice"}</code>.
                     </Paragraph>
                     <Paragraph>
                         Discord will close while the file is replaced. Use this only if you are fixing Voice Playground Method files or know you need that index.js.
@@ -353,7 +353,7 @@ function StereoInstallerPanel() {
                         <div className="vc-stereo-installer-select-row">
                             <div>
                                 <span>Voice Playground quality</span>
-                                <Paragraph>The selected file will be installed as discord_voice.node.</Paragraph>
+                                <Paragraph>The selected quality will be downloaded and installed as discord_voice.node.</Paragraph>
                             </div>
                             <Select
                                 options={METHOD_2_QUALITY_OPTIONS}
@@ -391,7 +391,7 @@ function StereoInstallerPanel() {
                 {installerMethod === "method2" && (
                     <div className="vc-stereo-installer-method2-note">
                         <Paragraph>
-                            Voice Playground Method uses bundled Windows payloads from StereoMethods/Discord-Voice for higher audio quality. Do not install both methods on the same client. If Discord voice files stop working, use the bundled index.js repair and check the tutorial.
+                            Voice Playground Method downloads Windows payloads from the upstream source for higher audio quality. Do not install both methods on the same client. If Discord voice files stop working, use the bundled index.js repair and check the tutorial.
                         </Paragraph>
                         <div className="vc-stereo-installer-warning-actions">
                             <Button

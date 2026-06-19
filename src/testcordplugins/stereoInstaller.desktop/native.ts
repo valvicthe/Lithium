@@ -7,10 +7,7 @@
 import { VENCORD_USER_AGENT } from "@shared/vencordUserAgent";
 import { spawn } from "child_process";
 import { app, dialog, type IpcMainInvokeEvent } from "electron";
-import method128 from "file://StereoMethods/Discord-Voice/(128) discord_voice.node?base64&trim=false";
-import method384 from "file://StereoMethods/Discord-Voice/(384) discord_voice.node?base64&trim=false";
-import method512 from "file://StereoMethods/Discord-Voice/(512) discord_voice.node?base64&trim=false";
-import method2Index from "file://StereoMethods/Discord-Voice/index.js?base64&trim=false";
+
 import { appendFileSync, constants, type Dirent, existsSync, mkdirSync } from "fs";
 import { access, chmod, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { arch, homedir, platform as osPlatform, release } from "os";
@@ -20,9 +17,9 @@ const APP_NAME = "StereoInstaller";
 const DATA_DIR_NAME = "DiscordStereoHubSimple";
 const MAX_DOWNLOAD_BYTES = 160 * 1024 * 1024;
 const MAX_VISIBLE_LOG_LINES = 500;
-const SOURCE_DISCORD_VOICE_DIR = "C:/Users/Hisako/Documents/Illegalcord/src/userplugins/stereoInstaller.desktop/StereoMethods/Discord-Voice";
 const PATCHED_WINDOWS_GITHUB_CONTENTS_API = "https://api.github.com/repos/ProdHallow/Discord-Stereo-Windows-MacOS-Linux/contents/Updates%2FNodes%2FPatched%20Nodes%20%28for%20Installer%29%2FWindows";
 const PATCHED_LINUX_GITHUB_CONTENTS_API = "https://api.github.com/repos/ProdHallow/Discord-Stereo-Windows-MacOS-Linux/contents/Updates%2FNodes%2FPatched%20Nodes%20%28for%20Installer%29%2FLinux";
+const VOICE_PLAYGROUND_RAW_BASE = "https://codeberg.org/UnpackedX/Discord-Experimental-Subsystem/raw/branch/main/StereoMethods/Discord-Voice";
 
 export interface InstallInfo {
     platformKey: string;
@@ -398,34 +395,7 @@ function appendLogLine(line: string): void {
 }
 
 function discordVoiceLoggingDir(): string {
-    return join(sourceDiscordVoiceDir() ?? join(hubDataDir(), "StereoMethods", "Discord-Voice"), "Logging");
-}
-
-function sourceDiscordVoiceDir(): string | undefined {
-    if (existsSync(SOURCE_DISCORD_VOICE_DIR)) return SOURCE_DISCORD_VOICE_DIR;
-
-    const relativeDiscordVoiceDir = join("src", "userplugins", "stereoInstaller.desktop", "StereoMethods", "Discord-Voice");
-    const roots = [
-        process.cwd(),
-        app.getAppPath(),
-        dirname(process.execPath),
-        process.env.INIT_CWD,
-        process.env.PWD,
-    ].filter((pathValue: string | undefined): pathValue is string => !!pathValue);
-
-    for (const root of roots) {
-        let current = resolve(root);
-        for (let i = 0; i < 8; i++) {
-            const candidate = join(current, relativeDiscordVoiceDir);
-            if (existsSync(candidate)) return candidate;
-
-            const parent = dirname(current);
-            if (parent === current) break;
-            current = parent;
-        }
-    }
-
-    return undefined;
+    return join(hubDataDir(), "StereoMethods", "Discord-Voice", "Logging");
 }
 
 function normalizeInputPath(pathValue: string): string {
@@ -990,7 +960,7 @@ async function clearDirContents(pathValue: string, allowedParent: string): Promi
 async function downloadBytes(url: string, timeoutMs: number, accept?: string): Promise<Buffer> {
     const parsedUrl = new URL(url);
     if (parsedUrl.protocol !== "https:") throw new Error("Download URL must use HTTPS.");
-    if (!["api.github.com", "raw.githubusercontent.com"].includes(parsedUrl.hostname)) {
+    if (!["api.github.com", "raw.githubusercontent.com", "codeberg.org"].includes(parsedUrl.hostname)) {
         throw new Error(`Download host is not allowed: ${parsedUrl.hostname}`);
     }
 
@@ -1064,12 +1034,13 @@ async function method2Target(target: Target): Promise<Target> {
     };
 }
 
-function method2Payload(quality: StereoMethod2Quality): string {
-    if (quality === "128") return method128;
-    if (quality === "384") return method384;
-    if (quality === "512") return method512;
-
-    throw new Error("Invalid Voice Playground Method quality selected.");
+async function method2Payload(quality: StereoMethod2Quality, log: ActionLog): Promise<Buffer> {
+    const fileName = `(${quality}) discord_voice.node`;
+    const url = `${VOICE_PLAYGROUND_RAW_BASE}/${encodeURIComponent(fileName)}`;
+    log.info(`Downloading Voice Playground Method payload: ${quality}`);
+    const data = await downloadBytes(url, 120_000);
+    validateDownloadPayload(fileName, data);
+    return data;
 }
 
 async function prepareMethod2Payload(quality: StereoMethod2Quality, log: ActionLog): Promise<string> {
@@ -1080,7 +1051,7 @@ async function prepareMethod2Payload(quality: StereoMethod2Quality, log: ActionL
 
     await mkdir(staging, { recursive: true });
     await clearDirContents(staging, hubDataDir());
-    await writeFile(targetFile, Buffer.from(method2Payload(quality), "base64"));
+    await writeFile(targetFile, await method2Payload(quality, log));
     validateDownloadPayload("discord_voice.node", await readFile(targetFile));
 
     log.ok(`Prepared Voice Playground Method payload: ${quality}.`);
@@ -1096,8 +1067,11 @@ async function prepareMethod2IndexPayload(log: ActionLog): Promise<string> {
 
     await mkdir(staging, { recursive: true });
     await clearDirContents(staging, hubDataDir());
-    await writeFile(targetFile, Buffer.from(method2Index, "base64"));
-    validateDownloadPayload("index.js", await readFile(targetFile));
+
+    log.info("Downloading Voice Playground Method index.js");
+    const data = await downloadBytes(`${VOICE_PLAYGROUND_RAW_BASE}/index.js`, 120_000);
+    validateDownloadPayload("index.js", data);
+    await writeFile(targetFile, data);
 
     log.ok("Prepared Voice Playground Method index.js payload.");
 
