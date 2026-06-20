@@ -9,9 +9,9 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin: 12px 12px 4px -12px;
+    margin: 12px 0 4px;
     color: var(--vc-dsa-warnings-title);
-    max-width: 100%;
+    width: 100%;
     overflow: visible;
 }
 
@@ -33,6 +33,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
+    width: 100%;
 }
 
 .vc-dsa-warnings-header-main {
@@ -109,7 +110,8 @@
     transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
     color: var(--vc-dsa-warnings-title);
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--white-500, #fff) 4%, transparent);
-    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
     overflow: hidden;
 }
 
@@ -132,8 +134,7 @@
 .vc-dsa-warnings-card-top {
     display: flex;
     align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
     width: 100%;
     min-width: 0;
 }
@@ -142,8 +143,7 @@
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    flex: 1 1 auto;
-    width: 100%;
+    flex: 1 1 0;
     min-width: 0;
 }
 
@@ -170,10 +170,9 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 4px;
-    flex: 1 1 auto;
+    margin-left: auto;
+    flex-shrink: 0;
     text-align: right;
-    min-width: 0;
-    max-width: 180px;
 }
 
 .vc-dsa-warnings-date {
@@ -181,6 +180,7 @@
     font-size: 11px;
     line-height: 1.15;
     font-weight: 700;
+    white-space: nowrap;
 }
 
 .vc-dsa-warnings-id {
@@ -193,8 +193,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    flex: 1 1 auto;
-    width: 100%;
+    flex: 1 1 0;
     min-width: 0;
 }
 
@@ -253,7 +252,6 @@
     letter-spacing: -0.02em;
     line-height: 1.08;
     margin: 0;
-    width: 100%;
     word-break: keep-all;
     overflow-wrap: break-word;
     white-space: normal;
@@ -265,7 +263,6 @@
     font-weight: 500;
     line-height: 1.45;
     margin: 0;
-    width: 100%;
     word-break: normal;
     overflow-wrap: break-word;
     white-space: normal;
@@ -369,9 +366,8 @@
 
     .vc-dsa-warnings-card-meta {
         align-items: flex-start;
+        margin-left: 0;
         text-align: left;
-        min-width: 0;
-        max-width: none;
     }
 
     .vc-dsa-warnings-category {
