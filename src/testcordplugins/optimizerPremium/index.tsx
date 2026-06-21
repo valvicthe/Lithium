@@ -650,6 +650,10 @@ interface SpringMod {
     Springs?: unknown;
 }
 
+type WebkitWindow = Window & typeof globalThis & {
+    webkitRTCPeerConnection?: typeof RTCPeerConnection;
+};
+
 export default definePlugin({
     name: "optimizerPremium",
     description: "All-in-one performance suite: webpack patches (tooltip, emoji, spinner, confetti, analytics, reactions, Sentry), bounded image cache, react-spring skip, offscreen media pause, MutationObserver DOM throttle, CSS containment (messages, members, DMs, embeds, servers, channels, forum, guild list, search), backdrop-blur/sticker/effect/upsell/spoiler/box-shadow/text-shadow/filter/backdrop suppression, lazy images/iframes, rAF reduction, passive listeners, console suppression (log/debug/info/warn/group/count/assert/dir/timers), ResizeObserver throttle, memory manager, GIF freeze (canvas/css), concurrency limit, message cache trimmer, animated avatar freeze, avatar quality reducer, cache limits, idle callback optimizer, drag-and-drop suppression, spellcheck opt-out, overscroll contain, link preview suppress, canvas effects hide.",
@@ -748,6 +752,7 @@ export default definePlugin({
     memoryTimer: null as ReturnType<typeof setInterval> | null,
     intersectionObserver: null as IntersectionObserver | null,
     lazyIframeObserver: null as IntersectionObserver | null,
+    lazyIframeMutationObserver: null as MutationObserver | null,
     mediaMutationObserver: null as MutationObserver | null,
     pausedMedia: new WeakSet<HTMLMediaElement>(),
     optimizerStyleEl: null as HTMLStyleElement | null,
@@ -762,9 +767,11 @@ export default definePlugin({
     consolidatedObserver: null as MutationObserver | null,
     observerCallbacks: new Map<string, (records: MutationRecord[]) => void>(),
     animatedEmojiObserver: null as MutationObserver | null,
+    imageDecodingObserver: null as MutationObserver | null,
     gifAutoplayObserver: null as MutationObserver | null,
     gifAutoplayCleanups: new WeakMap<HTMLVideoElement, () => void>(),
     avatarObserver: null as MutationObserver | null,
+    avatarQualityObserver: null as MutationObserver | null,
     preconnectLink: null as HTMLLinkElement | null,
     preconnectLink2: null as HTMLLinkElement | null,
     hoverTransitionStyleEl: null as HTMLStyleElement | null,
@@ -802,6 +809,7 @@ export default definePlugin({
     coalesceTimer: null as ReturnType<typeof requestAnimationFrame> | null,
     coalesceQueue: new Map<string, number>(),
     websocketPatchEl: null as HTMLStyleElement | null,
+    spellcheckObserver: null as MutationObserver | null,
 
     start() {
         if (settings.store.verboseLogging) logger.info("Starting optimizer suite");
@@ -889,12 +897,12 @@ export default definePlugin({
         this.teardownCompositingLayers();
         this.teardownAnimatedAvatarOptimizer();
         this.teardownAvatarQualityReducer();
-        this.restoreNetworkLayer();
         this.restoreRafReduction();
         this.restorePassiveListeners();
         this.restoreResizeObserverThrottle();
         this.teardownMessageCacheTrimmer();
         this.teardownConcurrentRequestLimiter();
+        this.restoreNetworkLayer();
         this.teardownIdleCallbackOptimizer();
         this.restoreConsoleWarnSuppression();
         this.restoreConsoleGroupSuppression();
@@ -903,13 +911,13 @@ export default definePlugin({
         this.restoreConsoleDirSuppression();
         this.teardownDragAndDrop();
         this.teardownSpellcheckOpt();
-        this.teardownFluxThrottle();
         this.teardownReactionSimplifier();
         this.teardownUnreadBadgeKiller();
         this.teardownCanvasSuppressor();
         this.teardownChannelTopicKiller();
         this.teardownFolderAnimationKiller();
         this.teardownReactionCoalescer();
+        this.teardownFluxThrottle();
         this.teardownInvitePreviewKiller();
         this.teardownMemberListGradient();
         this.teardownMemberFreezer();
@@ -944,8 +952,6 @@ export default definePlugin({
             this.consolidatedObserver = null;
         }
     },
-
-
 
     teardownConsolidatedObserver() {
         if (this.consolidatedObserver) {
@@ -1026,8 +1032,11 @@ export default definePlugin({
         const threshold = Math.min(skip, 99);
         window.requestAnimationFrame = ((cb: FrameRequestCallback) => {
             frame++;
+            const { originalRaf } = this;
+            if (!originalRaf) return 0;
+            if (document.activeElement?.closest("[data-slate-editor]")) return originalRaf(cb);
             if ((frame % 100) >= threshold) {
-                return this.originalRaf!(cb);
+                return originalRaf(cb);
             }
             return 0;
         }) as typeof requestAnimationFrame;
@@ -1545,6 +1554,9 @@ export default definePlugin({
 
         if (this.consolidatedObserver) {
             this.observerCallbacks.set("lazyIframes", callback);
+        } else {
+            this.lazyIframeMutationObserver = new MutationObserver(callback);
+            this.lazyIframeMutationObserver.observe(document.body, { childList: true, subtree: true });
         }
     },
 
@@ -1553,6 +1565,10 @@ export default definePlugin({
         if (this.lazyIframeObserver) {
             this.lazyIframeObserver.disconnect();
             this.lazyIframeObserver = null;
+        }
+        if (this.lazyIframeMutationObserver) {
+            this.lazyIframeMutationObserver.disconnect();
+            this.lazyIframeMutationObserver = null;
         }
         document.querySelectorAll<HTMLIFrameElement>("iframe[data-src]").forEach(iframe => {
             const orig = iframe.dataset.src;
@@ -1584,11 +1600,18 @@ export default definePlugin({
 
         if (this.consolidatedObserver) {
             this.observerCallbacks.set("imageDecoding", callback);
+        } else {
+            this.imageDecodingObserver = new MutationObserver(callback);
+            this.imageDecodingObserver.observe(document.body, { childList: true, subtree: true });
         }
     },
 
     teardownImageDecodingOptimization() {
         this.observerCallbacks.delete("imageDecoding");
+        if (this.imageDecodingObserver) {
+            this.imageDecodingObserver.disconnect();
+            this.imageDecodingObserver = null;
+        }
     },
 
     installExtraCSS() {
@@ -1601,7 +1624,7 @@ export default definePlugin({
         }
         if (settings.store.reduceMotion) {
             rules.push(
-                "*, *::before, *::after { animation-duration: 0.001ms !important; animation-delay: 0ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }"
+                "*:not(#vc-smoothtype-caret), *:not(#vc-smoothtype-caret)::before, *:not(#vc-smoothtype-caret)::after { animation-duration: 0.001ms !important; animation-delay: 0ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }"
             );
         }
         if (settings.store.killWillChange) {
@@ -2010,7 +2033,7 @@ export default definePlugin({
     },
 
     installHoverTransitionKiller() {
-        const css = "*,*::before,*::after{transition-duration:0s!important;transition-delay:0s!important}";
+        const css = "*:not(#vc-smoothtype-caret),*:not(#vc-smoothtype-caret)::before,*:not(#vc-smoothtype-caret)::after{transition-duration:0s!important;transition-delay:0s!important}";
         this.hoverTransitionStyleEl = document.createElement("style");
         this.hoverTransitionStyleEl.id = "op-kill-hover";
         this.hoverTransitionStyleEl.textContent = css;
@@ -2171,7 +2194,7 @@ export default definePlugin({
     installConcurrentRequestLimiter() {
         const maxConcurrent = settings.store.limitConcurrentRequests;
         if (maxConcurrent <= 0) return;
-        const origFetch = window.fetch.bind(window);
+        const origFetch = window.fetch;
         const queue = this.fetchQueue;
         let active = this.activeFetchCount;
 
@@ -2180,7 +2203,7 @@ export default definePlugin({
                 const item = queue.shift();
                 if (!item) break;
                 active++;
-                origFetch(item.target, item.init)
+                origFetch.call(window, item.target, item.init)
                     .then(r => item.resolve(r))
                     .catch(e => item.reject(e))
                     .finally(() => {
@@ -2197,7 +2220,7 @@ export default definePlugin({
                 });
             }
             active++;
-            return origFetch(input, init).finally(() => {
+            return origFetch.call(window, input, init).finally(() => {
                 active--;
                 processQueue();
             });
@@ -2385,11 +2408,18 @@ export default definePlugin({
 
         if (this.consolidatedObserver) {
             this.observerCallbacks.set("avatarQualityReducer", callback);
+        } else {
+            this.avatarQualityObserver = new MutationObserver(callback);
+            this.avatarQualityObserver.observe(document.body, { childList: true, subtree: true });
         }
     },
 
     teardownAvatarQualityReducer() {
         this.observerCallbacks.delete("avatarQualityReducer");
+        if (this.avatarQualityObserver) {
+            this.avatarQualityObserver.disconnect();
+            this.avatarQualityObserver = null;
+        }
     },
 
     installDragAndDropSuppression() {
@@ -2441,11 +2471,18 @@ export default definePlugin({
 
         if (this.consolidatedObserver) {
             this.observerCallbacks.set("spellcheckOpt", callback);
+        } else {
+            this.spellcheckObserver = new MutationObserver(callback);
+            this.spellcheckObserver.observe(document.body, { childList: true, subtree: true });
         }
     },
 
     teardownSpellcheckOpt() {
         this.observerCallbacks.delete("spellcheckOpt");
+        if (this.spellcheckObserver) {
+            this.spellcheckObserver.disconnect();
+            this.spellcheckObserver = null;
+        }
         document.querySelectorAll<HTMLElement>("[data-op-nospell]").forEach(el => {
             el.removeAttribute("data-op-nospell");
             el.removeAttribute("spellcheck");
@@ -2473,9 +2510,11 @@ export default definePlugin({
             iceConnectionState: "closed",
             signalingState: "closed",
         };
+        const webkitWindow = window as WebkitWindow;
         (window as any).__op_origRtc = window.RTCPeerConnection;
+        (window as any).__op_origWebkitRtc = webkitWindow.webkitRTCPeerConnection;
         window.RTCPeerConnection = noop;
-        (window as any).webkitRTCPeerConnection = noop;
+        webkitWindow.webkitRTCPeerConnection = noop;
         if (settings.store.verboseLogging) logger.info("Voice/video WebRTC neutered");
     },
 
@@ -2485,6 +2524,14 @@ export default definePlugin({
             window.RTCPeerConnection = orig;
             delete (window as any).__op_origRtc;
         }
+        const webkitWindow = window as WebkitWindow;
+        const webkitOrig = (window as any).__op_origWebkitRtc;
+        if (webkitOrig) {
+            webkitWindow.webkitRTCPeerConnection = webkitOrig;
+        } else {
+            delete webkitWindow.webkitRTCPeerConnection;
+        }
+        delete (window as any).__op_origWebkitRtc;
     },
 
     installWebSocketFloodPreventer() {
@@ -2534,7 +2581,7 @@ export default definePlugin({
                     timers.delete(payload.type);
                     return origDispatch(payload);
                 }, DEBOUNCE_MS));
-                return origDispatch(payload);
+                return undefined;
             }
             return origDispatch(payload);
         } as typeof FluxDispatcher.dispatch;
@@ -2649,6 +2696,7 @@ export default definePlugin({
     installReactionCoalescer() {
         let framePending = false;
         const queue = this.coalesceQueue;
+        const plugin = this;
         const apply = () => {
             for (const [key, count] of queue) {
                 const el = document.querySelector<HTMLElement>(`[data-op-reaction-key="${key}"]`);
@@ -2656,6 +2704,7 @@ export default definePlugin({
             }
             queue.clear();
             framePending = false;
+            plugin.coalesceTimer = null;
         };
         const origDispatch = FluxDispatcher.dispatch.bind(FluxDispatcher);
         (window as any).__op_coalesceOrig = origDispatch;
@@ -2665,7 +2714,7 @@ export default definePlugin({
                 if (payload.count !== undefined) queue.set(key, payload.count);
                 if (!framePending) {
                     framePending = true;
-                    requestAnimationFrame(apply);
+                    plugin.coalesceTimer = requestAnimationFrame(apply);
                 }
                 return origDispatch(payload);
             }
