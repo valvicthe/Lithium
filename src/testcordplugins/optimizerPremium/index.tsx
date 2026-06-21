@@ -627,7 +627,17 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Hide server invite preview cards in chat. Stops image fetch, decode, and rich rendering of invite embeds.",
         default: false
-    }
+    },
+    unifiedMemberListGradient: {
+        type: OptionType.BOOLEAN,
+        description: "Replace per-member hover/select gradients with a single gradient behind the entire member list. Dramatically reduces paint layers on scroll and hover.",
+        default: false
+    },
+    freezeMemberList: {
+        type: OptionType.BOOLEAN,
+        description: "Freeze member list DOM with paint/layout containment so presence changes, voice states, and status updates don't trigger repaints. Unfreezes briefly every 3 minutes to batch-refresh. Massive smoothness gain in large servers.",
+        default: false
+    },
 });
 
 interface CacheEntry {
@@ -786,6 +796,9 @@ export default definePlugin({
     channelTopicEl: null as HTMLStyleElement | null,
     folderAnimEl: null as HTMLStyleElement | null,
     invitePreviewEl: null as HTMLStyleElement | null,
+    memberListGradientEl: null as HTMLStyleElement | null,
+    memberFreezeEl: null as HTMLStyleElement | null,
+    memberFreezeTimer: null as ReturnType<typeof setInterval> | null,
     coalesceTimer: null as ReturnType<typeof requestAnimationFrame> | null,
     coalesceQueue: new Map<string, number>(),
     websocketPatchEl: null as HTMLStyleElement | null,
@@ -835,6 +848,8 @@ export default definePlugin({
         try { if (settings.store.disableFolderAnimations) this.installFolderAnimationKiller(); } catch (e) { logger.warn("installFolderAnimationKiller failed", e); }
         try { if (settings.store.coalesceReactionCounters) this.installReactionCoalescer(); } catch (e) { logger.warn("installReactionCoalescer failed", e); }
         try { if (settings.store.disableInvitePreviews) this.installInvitePreviewKiller(); } catch (e) { logger.warn("installInvitePreviewKiller failed", e); }
+        try { if (settings.store.unifiedMemberListGradient) this.installMemberListGradient(); } catch (e) { logger.warn("installMemberListGradient failed", e); }
+        try { if (settings.store.freezeMemberList) this.installMemberFreezer(); } catch (e) { logger.warn("installMemberFreezer failed", e); }
         try { if (settings.store.killVoiceVideo) this.installVoiceVideoKiller(); } catch (e) { logger.warn("installVoiceVideoKiller failed", e); }
         try { if (settings.store.preventWebSocketFlood) this.installWebSocketFloodPreventer(); } catch (e) { logger.warn("installWebSocketFloodPreventer failed", e); }
         try { this.installExtraCSS(); } catch (e) { logger.warn("installExtraCSS failed", e); }
@@ -896,6 +911,8 @@ export default definePlugin({
         this.teardownFolderAnimationKiller();
         this.teardownReactionCoalescer();
         this.teardownInvitePreviewKiller();
+        this.teardownMemberListGradient();
+        this.teardownMemberFreezer();
         this.teardownVoiceVideoKiller();
         this.teardownWebSocketFloodPreventer();
 
@@ -920,18 +937,15 @@ export default definePlugin({
                     }
                 }
             });
-
-            this.consolidatedObserver.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-
+            this.consolidatedObserver.observe(document.body, { childList: true, subtree: true });
             if (settings.store.verboseLogging) logger.info("Installed consolidated MutationObserver");
         } catch (err) {
             if (settings.store.verboseLogging) logger.warn("Failed to install consolidated observer", err);
             this.consolidatedObserver = null;
         }
     },
+
+
 
     teardownConsolidatedObserver() {
         if (this.consolidatedObserver) {
@@ -2688,6 +2702,65 @@ export default definePlugin({
         if (this.invitePreviewEl) {
             this.invitePreviewEl.remove();
             this.invitePreviewEl = null;
+        }
+    },
+
+    installMemberListGradient() {
+        const css = `
+[class*="members_"]>[class*="member_"]{background:none!important}
+[class*="members_"]>[class*="member_"]:hover{background:none!important}
+[class*="members_"]>[class*="member_"][class*="selected_"]{background:none!important}
+[class*="members_"]>[class*="member_"][class*="focused_"]{background:none!important}
+[class*="membersWrap_"]{background:linear-gradient(180deg,var(--background-primary),var(--background-secondary-alt),var(--background-primary))!important;position:relative}
+[class*="membersWrap_"]::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 0%,var(--background-modifier-hover) 50%,transparent 100%);pointer-events:none;z-index:0}
+[class*="members_"]{position:relative;z-index:1}
+`;
+        this.memberListGradientEl = document.createElement("style");
+        this.memberListGradientEl.id = "op-member-gradient";
+        this.memberListGradientEl.textContent = css;
+        document.head.appendChild(this.memberListGradientEl);
+    },
+
+    teardownMemberListGradient() {
+        if (this.memberListGradientEl) {
+            this.memberListGradientEl.remove();
+            this.memberListGradientEl = null;
+        }
+    },
+
+    installMemberFreezer() {
+        const css = `
+[class*="members_"]>[class*="member_"]{contain:paint layout style}
+[class*="members_"]>[class*="member_"] *{animation:none!important;transition:none!important}
+[class*="members_"]>[class*="membersGroup_"]{contain:paint layout style}
+`;
+        this.memberFreezeEl = document.createElement("style");
+        this.memberFreezeEl.id = "op-freeze-members";
+        this.memberFreezeEl.textContent = css;
+        document.head.appendChild(this.memberFreezeEl);
+
+        const REFRESH_MS = 3 * 60 * 1000;
+        this.memberFreezeTimer = setInterval(() => {
+            const el = this.memberFreezeEl;
+            if (el && el.parentNode) {
+                el.remove();
+                setTimeout(() => {
+                    if (this.memberFreezeEl && !this.memberFreezeEl.parentNode) {
+                        document.head.appendChild(this.memberFreezeEl);
+                    }
+                }, 300);
+            }
+        }, REFRESH_MS);
+    },
+
+    teardownMemberFreezer() {
+        if (this.memberFreezeTimer !== null) {
+            clearInterval(this.memberFreezeTimer);
+            this.memberFreezeTimer = null;
+        }
+        if (this.memberFreezeEl) {
+            this.memberFreezeEl.remove();
+            this.memberFreezeEl = null;
         }
     },
 });
