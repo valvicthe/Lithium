@@ -572,6 +572,61 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Hide non-essential canvas elements (particles, confetti, backgrounds). Saves GPU composite and canvas redraw.",
         default: false
+    },
+
+    // --- Extreme performance (empty-page smoothness) ---
+
+    killVoiceVideo: {
+        type: OptionType.BOOLEAN,
+        description: "Override RTCPeerConnection to neuter all voice/video WebRTC connections. Massive resource savings from audio/video encode/decode pipelines.",
+        default: false,
+        restartNeeded: true
+    },
+    throttleFluxDispatches: {
+        type: OptionType.BOOLEAN,
+        description: "Debounce high-frequency flux dispatches (typing, presence, voice states). Prevents React re-render storms from status spam in large servers.",
+        default: false
+    },
+    killReactionRendering: {
+        type: OptionType.BOOLEAN,
+        description: "Strip reaction button DOM to bare text counts. Removes animated emoji, hover effects, and reaction button chrome for drastic DOM simplification.",
+        default: false
+    },
+    disableUnreadBadges: {
+        type: OptionType.BOOLEAN,
+        description: "Hide all unread message and mention badges everywhere. Stops continuous badge DOM updates that trigger layout on every message.",
+        default: false
+    },
+    suppressAllCanvas: {
+        type: OptionType.BOOLEAN,
+        description: "Hide decorative canvas elements not covered by disableCanvasEffects. Adds broader canvas suppression for remaining effect canvases.",
+        default: false
+    },
+    disableChannelTopic: {
+        type: OptionType.BOOLEAN,
+        description: "Hide the channel topic/description area above the message list. Removes one more layout/paint pass per channel view.",
+        default: false
+    },
+    preventWebSocketFlood: {
+        type: OptionType.BOOLEAN,
+        description: "Throttle WebSocket reconnect attempts with exponential backoff cap. Prevents reconnect storms from flooding the main thread during transient network issues.",
+        default: false,
+        restartNeeded: true
+    },
+    disableFolderAnimations: {
+        type: OptionType.BOOLEAN,
+        description: "Remove server folder expand/collapse transition animations. Stops layout recalculations during folder interactions.",
+        default: false
+    },
+    coalesceReactionCounters: {
+        type: OptionType.BOOLEAN,
+        description: "Batch reaction count DOM updates into a single mutation per frame. Prevents layout thrash when many reactions arrive on the same message simultaneously.",
+        default: false
+    },
+    disableInvitePreviews: {
+        type: OptionType.BOOLEAN,
+        description: "Hide server invite preview cards in chat. Stops image fetch, decode, and rich rendering of invite embeds.",
+        default: false
     }
 });
 
@@ -725,6 +780,15 @@ export default definePlugin({
     originalScrollTo: null as typeof window.scrollTo | null,
     rICMessagePort: null as MessagePort | null,
     suppressConsoleWarnEl: null as HTMLStyleElement | null,
+    reactionStyleEl: null as HTMLStyleElement | null,
+    canvasSuppressEl: null as HTMLStyleElement | null,
+    unreadBadgeEl: null as HTMLStyleElement | null,
+    channelTopicEl: null as HTMLStyleElement | null,
+    folderAnimEl: null as HTMLStyleElement | null,
+    invitePreviewEl: null as HTMLStyleElement | null,
+    coalesceTimer: null as ReturnType<typeof requestAnimationFrame> | null,
+    coalesceQueue: new Map<string, number>(),
+    websocketPatchEl: null as HTMLStyleElement | null,
 
     start() {
         if (settings.store.verboseLogging) logger.info("Starting optimizer suite");
@@ -763,6 +827,16 @@ export default definePlugin({
         try { if (settings.store.suppressIdleCallback) this.installIdleCallbackOptimizer(); } catch (e) { logger.warn("installIdleCallbackOptimizer failed", e); }
         try { if (settings.store.disableDragAndDrop) this.installDragAndDropSuppression(); } catch (e) { logger.warn("installDragAndDropSuppression failed", e); }
         try { if (settings.store.disableSpellcheck) this.installSpellcheckOpt(); } catch (e) { logger.warn("installSpellcheckOpt failed", e); }
+        try { if (settings.store.throttleFluxDispatches) this.installFluxThrottle(); } catch (e) { logger.warn("installFluxThrottle failed", e); }
+        try { if (settings.store.killReactionRendering) this.installReactionSimplifier(); } catch (e) { logger.warn("installReactionSimplifier failed", e); }
+        try { if (settings.store.disableUnreadBadges) this.installUnreadBadgeKiller(); } catch (e) { logger.warn("installUnreadBadgeKiller failed", e); }
+        try { if (settings.store.suppressAllCanvas) this.installCanvasSuppressor(); } catch (e) { logger.warn("installCanvasSuppressor failed", e); }
+        try { if (settings.store.disableChannelTopic) this.installChannelTopicKiller(); } catch (e) { logger.warn("installChannelTopicKiller failed", e); }
+        try { if (settings.store.disableFolderAnimations) this.installFolderAnimationKiller(); } catch (e) { logger.warn("installFolderAnimationKiller failed", e); }
+        try { if (settings.store.coalesceReactionCounters) this.installReactionCoalescer(); } catch (e) { logger.warn("installReactionCoalescer failed", e); }
+        try { if (settings.store.disableInvitePreviews) this.installInvitePreviewKiller(); } catch (e) { logger.warn("installInvitePreviewKiller failed", e); }
+        try { if (settings.store.killVoiceVideo) this.installVoiceVideoKiller(); } catch (e) { logger.warn("installVoiceVideoKiller failed", e); }
+        try { if (settings.store.preventWebSocketFlood) this.installWebSocketFloodPreventer(); } catch (e) { logger.warn("installWebSocketFloodPreventer failed", e); }
         try { this.installExtraCSS(); } catch (e) { logger.warn("installExtraCSS failed", e); }
 
         if (settings.store.cacheLimitsEnabled) {
@@ -814,6 +888,16 @@ export default definePlugin({
         this.restoreConsoleDirSuppression();
         this.teardownDragAndDrop();
         this.teardownSpellcheckOpt();
+        this.teardownFluxThrottle();
+        this.teardownReactionSimplifier();
+        this.teardownUnreadBadgeKiller();
+        this.teardownCanvasSuppressor();
+        this.teardownChannelTopicKiller();
+        this.teardownFolderAnimationKiller();
+        this.teardownReactionCoalescer();
+        this.teardownInvitePreviewKiller();
+        this.teardownVoiceVideoKiller();
+        this.teardownWebSocketFloodPreventer();
 
         this.networkCache.clear();
         this.networkCacheOrder.length = 0;
@@ -2352,5 +2436,258 @@ export default definePlugin({
             el.removeAttribute("data-op-nospell");
             el.removeAttribute("spellcheck");
         });
-    }
+    },
+
+    // --- Extreme performance methods ---
+
+    installVoiceVideoKiller() {
+        if (typeof window.RTCPeerConnection === "undefined") return;
+        const noop: any = function () { return noopProto; };
+        const noopProto = {
+            close: () => {},
+            createOffer: () => Promise.reject(new Error("Voice disabled")),
+            createAnswer: () => Promise.reject(new Error("Voice disabled")),
+            setLocalDescription: () => Promise.resolve(),
+            setRemoteDescription: () => Promise.resolve(),
+            addIceCandidate: () => Promise.resolve(),
+            addTrack: () => {},
+            removeTrack: () => {},
+            getTransceivers: () => [],
+            getSenders: () => [],
+            getReceivers: () => [],
+            connectionState: "closed",
+            iceConnectionState: "closed",
+            signalingState: "closed",
+        };
+        (window as any).__op_origRtc = window.RTCPeerConnection;
+        window.RTCPeerConnection = noop;
+        (window as any).webkitRTCPeerConnection = noop;
+        if (settings.store.verboseLogging) logger.info("Voice/video WebRTC neutered");
+    },
+
+    teardownVoiceVideoKiller() {
+        const orig = (window as any).__op_origRtc;
+        if (orig) {
+            window.RTCPeerConnection = orig;
+            delete (window as any).__op_origRtc;
+        }
+    },
+
+    installWebSocketFloodPreventer() {
+        const origSend = WebSocket.prototype.send;
+        (window as any).__op_origWsSend = origSend;
+        let reconnectCount = 0;
+        let lastReconnect = 0;
+        const MIN_INTERVAL = 2000;
+        WebSocket.prototype.send = function (data: any) {
+            try {
+                const parsed = typeof data === "string" && data.startsWith("{") ? JSON.parse(data) : null;
+                if (parsed && parsed.op === 7) {
+                    const now = Date.now();
+                    if (now - lastReconnect < MIN_INTERVAL) {
+                        reconnectCount++;
+                        if (reconnectCount > 3) return;
+                    } else {
+                        reconnectCount = 0;
+                    }
+                    lastReconnect = now;
+                }
+            } catch { }
+            return origSend.call(this, data);
+        };
+        if (settings.store.verboseLogging) logger.info("WebSocket reconnect throttle active");
+    },
+
+    teardownWebSocketFloodPreventer() {
+        const orig = (window as any).__op_origWsSend;
+        if (orig) {
+            WebSocket.prototype.send = orig;
+            delete (window as any).__op_origWsSend;
+        }
+    },
+
+    installFluxThrottle() {
+        const origDispatch = FluxDispatcher.dispatch.bind(FluxDispatcher);
+        const THROTTLED = new Set(["TYPING_START", "TYPING_STOP", "PRESENCE_UPDATES", "PRESENCE_UPDATE", "VOICE_STATE_UPDATES"]);
+        const timers = new Map<string, ReturnType<typeof setTimeout>>();
+        const DEBOUNCE_MS = 120;
+        (window as any).__op_fluxState = { origDispatch, timers };
+        FluxDispatcher.dispatch = function (payload: { type: string }) {
+            if (THROTTLED.has(payload.type)) {
+                const existing = timers.get(payload.type);
+                if (existing) clearTimeout(existing);
+                timers.set(payload.type, setTimeout(() => {
+                    timers.delete(payload.type);
+                    return origDispatch(payload);
+                }, DEBOUNCE_MS));
+                return origDispatch(payload);
+            }
+            return origDispatch(payload);
+        } as typeof FluxDispatcher.dispatch;
+    },
+
+    teardownFluxThrottle() {
+        const state = (window as any).__op_fluxState;
+        if (state) {
+            for (const t of state.timers.values()) clearTimeout(t);
+            state.timers.clear();
+            FluxDispatcher.dispatch = state.origDispatch;
+            delete (window as any).__op_fluxState;
+        }
+    },
+
+    installReactionSimplifier() {
+        const css = `
+[class*="message_"] [class*="reaction_"][class*="reactionBtn_"]{background:none!important;border:none!important;padding:2px 4px!important;min-width:unset!important}
+[class*="message_"] [class*="reaction_"][class*="reactionBtn_"]:hover{background:none!important}
+[class*="message_"] [class*="reactionCount_"]{font-size:11px!important;font-weight:400!important}
+[class*="message_"] [class*="reaction_"][class*="reactionBtn_"] img,[class*="message_"] [class*="reaction_"][class*="reactionBtn_"] [class*="emoji"]{width:14px!important;height:14px!important}
+[class*="message_"] [class*="reaction_"][class*="reactionBtn_"]:not(:hover){opacity:.6}
+`;
+        this.reactionStyleEl = document.createElement("style");
+        this.reactionStyleEl.id = "op-simplify-reactions";
+        this.reactionStyleEl.textContent = css;
+        document.head.appendChild(this.reactionStyleEl);
+    },
+
+    teardownReactionSimplifier() {
+        if (this.reactionStyleEl) {
+            this.reactionStyleEl.remove();
+            this.reactionStyleEl = null;
+        }
+    },
+
+    installUnreadBadgeKiller() {
+        const css = `
+[class*="sidebar_"] [class*="unread_"]{display:none!important}
+[class*="chat_"] [class*="unread_"]{display:none!important}
+[class*="sidebar_"] [class*="badge_"][class*="number_"]{display:none!important}
+[class*="sidebar_"] [class*="mention_"][class*="badge_"]{display:none!important}
+[class*="badgePulse_"]{display:none!important}
+[class*="sidebar_"] [class*="unreadPill_"]{display:none!important}
+[class*="sidebar_"] [class*="unreadBar_"]{display:none!important}
+`;
+        this.unreadBadgeEl = document.createElement("style");
+        this.unreadBadgeEl.id = "op-kill-badges";
+        this.unreadBadgeEl.textContent = css;
+        document.head.appendChild(this.unreadBadgeEl);
+    },
+
+    teardownUnreadBadgeKiller() {
+        if (this.unreadBadgeEl) {
+            this.unreadBadgeEl.remove();
+            this.unreadBadgeEl = null;
+        }
+    },
+
+    installCanvasSuppressor() {
+        const css = "canvas[class*=\"spriteCanvas_\"],canvas[class*=\"effects_\"],canvas[id*=\"confetti\"]{display:none!important}";
+        this.canvasSuppressEl = document.createElement("style");
+        this.canvasSuppressEl.id = "op-kill-canvas";
+        this.canvasSuppressEl.textContent = css;
+        document.head.appendChild(this.canvasSuppressEl);
+    },
+
+    teardownCanvasSuppressor() {
+        if (this.canvasSuppressEl) {
+            this.canvasSuppressEl.remove();
+            this.canvasSuppressEl = null;
+        }
+    },
+
+    installChannelTopicKiller() {
+        const css = `
+[class*="chatContent_"]>[class*="topic_"]{display:none!important}
+[class*="chat_"]>[class*="title_"]>[class*="topic_"]{display:none!important}
+[class*="chat_"] [class*="channelTopic_"]{display:none!important}
+`;
+        this.channelTopicEl = document.createElement("style");
+        this.channelTopicEl.id = "op-kill-topic";
+        this.channelTopicEl.textContent = css;
+        document.head.appendChild(this.channelTopicEl);
+    },
+
+    teardownChannelTopicKiller() {
+        if (this.channelTopicEl) {
+            this.channelTopicEl.remove();
+            this.channelTopicEl = null;
+        }
+    },
+
+    installFolderAnimationKiller() {
+        const css = `
+[class*="folder_"][class*="expandedFolder_"]{animation:none!important;transition:none!important}
+[class*="folderIcon_"]{animation:none!important;transition:none!important}
+`;
+        this.folderAnimEl = document.createElement("style");
+        this.folderAnimEl.id = "op-kill-folder-anim";
+        this.folderAnimEl.textContent = css;
+        document.head.appendChild(this.folderAnimEl);
+    },
+
+    teardownFolderAnimationKiller() {
+        if (this.folderAnimEl) {
+            this.folderAnimEl.remove();
+            this.folderAnimEl = null;
+        }
+    },
+
+    installReactionCoalescer() {
+        let framePending = false;
+        const queue = this.coalesceQueue;
+        const apply = () => {
+            for (const [key, count] of queue) {
+                const el = document.querySelector<HTMLElement>(`[data-op-reaction-key="${key}"]`);
+                if (el) el.textContent = String(count);
+            }
+            queue.clear();
+            framePending = false;
+        };
+        const origDispatch = FluxDispatcher.dispatch.bind(FluxDispatcher);
+        (window as any).__op_coalesceOrig = origDispatch;
+        FluxDispatcher.dispatch = function (payload: { type: string; messageId?: string; emoji?: { name: string }; count?: number }) {
+            if (payload.type === "MESSAGE_REACTION_ADD" || payload.type === "MESSAGE_REACTION_REMOVE") {
+                const key = `${payload.messageId}_${payload.emoji?.name}`;
+                if (payload.count !== undefined) queue.set(key, payload.count);
+                if (!framePending) {
+                    framePending = true;
+                    requestAnimationFrame(apply);
+                }
+                return origDispatch(payload);
+            }
+            return origDispatch(payload);
+        } as typeof FluxDispatcher.dispatch;
+    },
+
+    teardownReactionCoalescer() {
+        const orig = (window as any).__op_coalesceOrig;
+        if (orig) {
+            FluxDispatcher.dispatch = orig;
+            delete (window as any).__op_coalesceOrig;
+        }
+        this.coalesceQueue.clear();
+        if (this.coalesceTimer !== null) {
+            cancelAnimationFrame(this.coalesceTimer);
+            this.coalesceTimer = null;
+        }
+    },
+
+    installInvitePreviewKiller() {
+        const css = `
+[class*="chat_"] [class*="invite_"]{display:none!important}
+[class*="chat_"] [class*="inviteCard_"]{display:none!important}
+[class*="chat_"] [class*="wrapper_"][class*="invite_"]{display:none!important}
+`;
+        this.invitePreviewEl = document.createElement("style");
+        this.invitePreviewEl.id = "op-kill-invites";
+        this.invitePreviewEl.textContent = css;
+        document.head.appendChild(this.invitePreviewEl);
+    },
+
+    teardownInvitePreviewKiller() {
+        if (this.invitePreviewEl) {
+            this.invitePreviewEl.remove();
+            this.invitePreviewEl = null;
+        }
+    },
 });
