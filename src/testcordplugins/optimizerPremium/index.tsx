@@ -9,7 +9,7 @@ import { disableCacheLimits, resetCacheLimits } from "@utils/cacheLimits";
 import { TestcordDevs } from "@utils/constants";
 import { Logger } from "@utils/Logger";
 import definePlugin, { OptionType } from "@utils/types";
-import { findAll, findByPropsLazy } from "@webpack";
+import { findAll } from "@webpack";
 
 const logger = new Logger("OptimizerPremium");
 
@@ -568,30 +568,24 @@ export default definePlugin({
         },
         {
             // Kill Sentry init — patch the DSN to empty so the SDK never boots
-            find: /Sentry\.init\(?\{.*?dsn/i,
+            find: "Sentry.init",
             predicate: () => settings.store.killSentry,
             replacement: {
-                match: /\i\.init\(\{[^}]*dsn:/,
-                replace: "$&\"\","
+                match: /Sentry\.init\(\{([^}]*)dsn:([^,}]*)/,
+                replace: 'Sentry.init({$1dsn:"",$2'
             },
             noWarn: true
         }
     ],
 
     originals: {} as {
-        rAF?: typeof window.requestAnimationFrame;
-        cAF?: typeof window.cancelAnimationFrame;
         fetch?: typeof window.fetch;
-        addEventListener?: typeof EventTarget.prototype.addEventListener;
-        resizeObserver?: typeof ResizeObserver;
         console?: { log: typeof console.log; debug: typeof console.debug; info: typeof console.info; };
         _perfMark?: typeof performance.mark;
         _perfMeasure?: typeof performance.measure;
         _consoleTime?: typeof console.time;
         _consoleTimeEnd?: typeof console.timeEnd;
         _consoleTimeLog?: typeof console.timeLog;
-        rIC?: typeof window.requestIdleCallback;
-        cIC?: typeof window.cancelIdleCallback;
     },
     springs: [] as SpringMod[],
     networkCache: new Map<string, CacheEntry>(),
@@ -611,20 +605,12 @@ export default definePlugin({
     gifManagedImages: new WeakSet<HTMLImageElement>(),
     gifBlobUrls: new Set<string>(),
     lazyImageObserver: null as MutationObserver | null,
-    rafFakeHandles: new Map<number, true>(),
-    rafFakeCounter: 1 << 30,
-    rafFrameCounter: 0,
     consolidatedObserver: null as MutationObserver | null,
     observerCallbacks: new Map<string, (records: MutationRecord[]) => void>(),
     animatedEmojiObserver: null as MutationObserver | null,
     gifAutoplayObserver: null as MutationObserver | null,
     gifAutoplayCleanups: new WeakMap<HTMLVideoElement, () => void>(),
-    fluxDispatchOriginal: null as ((event: any) => void) | null,
-    _fluxMessageTimer: null as ReturnType<typeof setTimeout> | null,
     avatarObserver: null as MutationObserver | null,
-    cacheTrimTimer: null as ReturnType<typeof setInterval> | null,
-    originalRIC: null as typeof window.requestIdleCallback | null,
-    originalCIC: null as typeof window.cancelIdleCallback | null,
     preconnectLink: null as HTMLLinkElement | null,
     preconnectLink2: null as HTMLLinkElement | null,
     hoverTransitionStyleEl: null as HTMLStyleElement | null,
@@ -635,29 +621,23 @@ export default definePlugin({
 
         if (settings.store.throttleMutationObservers) this.installConsolidatedObserver();
         if (settings.store.domThrottle) this.installDomThrottle();
-        if (settings.store.animationFrameReduction > 0) this.installRafReduction();
-        if (settings.store.networkCache || settings.store.forceLowImageQuality || settings.store.limitConcurrentRequests > 0) this.installNetworkLayer();
+        if (settings.store.networkCache || settings.store.forceLowImageQuality) this.installNetworkLayer();
         if (settings.store.disableSpringAnimations) this.installSpringSkip();
         if (settings.store.memoryManagement) this.installMemoryManager();
         if (settings.store.pauseOffscreenMedia) this.installOffscreenMediaPause();
         if (settings.store.virtualizeMessages || settings.store.optimizeTextRendering) this.installCSSOptimizations();
-        if (settings.store.forcePassiveListeners) this.installPassiveListeners();
         if (settings.store.suppressConsoleSpam) this.installConsoleSuppression();
-        if (settings.store.throttleResizeObservers) this.installResizeObserverThrottle();
         if (settings.store.freezeGifsUntilHover && settings.store.gifFreezeMethod !== "css") this.installGifFreezer();
         if (settings.store.lazyEmbedImages) this.installLazyImages();
         if (settings.store.lazyIframes) this.installLazyIframes();
         if (settings.store.optimizeImageDecoding) this.installImageDecodingOptimization();
         if (settings.store.disableAnimatedEmoji) this.installDisableAnimatedEmoji();
         if (settings.store.suppressGifAutoplay) this.installSuppressGifAutoplay();
-        if (settings.store.debounceFluxMessages > 0 || settings.store.throttlePresenceUpdates || settings.store.debounceReactionUpdates || settings.store.throttleVoiceStateUpdates || settings.store.debounceChannelSelect) this.installFluxPipeline();
         if (settings.store.killPerformanceMetrics) this.installPerfMetricsBlocker();
         if (settings.store.suppressConsoleTimers) this.installConsoleTimerBlocker();
         if (settings.store.killHoverTransitions) this.installHoverTransitionKiller();
         if (settings.store.preconnectDiscordCdn) this.installPreconnect();
         if (settings.store.forceCompositingLayers) this.installCompositingLayers();
-        if (settings.store.suppressIdleCallback) this.installIdleCallbackOptimizer();
-        if (settings.store.limitMessageCache) this.installMessageCacheTrimmer();
         if (settings.store.freezeAnimatedAvatars) this.installAnimatedAvatarOptimizer();
         if (settings.store.reduceAvatarQuality) this.installAvatarQualityReducer();
         this.installExtraCSS();
@@ -678,14 +658,11 @@ export default definePlugin({
 
         this.teardownConsolidatedObserver();
         this.teardownDomThrottle();
-        this.restoreRafReduction();
         this.restoreSpringSkip();
         this.teardownMemoryManager();
         this.teardownOffscreenMediaPause();
         this.teardownCSSOptimizations();
-        this.restorePassiveListeners();
         this.restoreConsoleSuppression();
-        this.restoreResizeObserverThrottle();
         this.teardownGifFreezer();
         this.teardownLazyImages();
         this.teardownLazyIframes();
@@ -699,8 +676,6 @@ export default definePlugin({
         this.teardownHoverTransitionKiller();
         this.teardownPreconnect();
         this.teardownCompositingLayers();
-        this.teardownIdleCallbackOptimizer();
-        this.teardownMessageCacheTrimmer();
         this.teardownAnimatedAvatarOptimizer();
         this.teardownAvatarQualityReducer();
         this.restoreNetworkLayer();
@@ -716,22 +691,27 @@ export default definePlugin({
 
         const callbacks = this.observerCallbacks;
 
-        this.consolidatedObserver = new MutationObserver(records => {
-            for (const cb of callbacks.values()) {
-                try {
-                    cb(records);
-                } catch (err) {
-                    if (settings.store.verboseLogging) logger.warn("Consolidated observer callback error", err);
+        try {
+            this.consolidatedObserver = new MutationObserver(records => {
+                for (const cb of callbacks.values()) {
+                    try {
+                        cb(records);
+                    } catch (err) {
+                        if (settings.store.verboseLogging) logger.warn("Consolidated observer callback error", err);
+                    }
                 }
-            }
-        });
+            });
 
-        this.consolidatedObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+            this.consolidatedObserver.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
 
-        if (settings.store.verboseLogging) logger.info("Installed consolidated MutationObserver");
+            if (settings.store.verboseLogging) logger.info("Installed consolidated MutationObserver");
+        } catch (err) {
+            if (settings.store.verboseLogging) logger.warn("Failed to install consolidated observer", err);
+            this.consolidatedObserver = null;
+        }
     },
 
     teardownConsolidatedObserver() {
@@ -806,44 +786,9 @@ export default definePlugin({
     },
 
     installRafReduction() {
-        this.originals.rAF = window.requestAnimationFrame;
-        this.originals.cAF = window.cancelAnimationFrame;
-
-        const reduction = Math.min(100, Math.max(0, settings.store.animationFrameReduction)) / 100;
-        const skipEvery = Math.ceil(1 + reduction * 3);
-        const fakeHandles = this.rafFakeHandles;
-        const origRaf = this.originals.rAF;
-        const origCaf = this.originals.cAF;
-
-        window.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-            this.rafFrameCounter++;
-            if (reduction > 0 && this.rafFrameCounter % skipEvery !== 0) {
-                const id = this.rafFakeCounter++;
-                fakeHandles.set(id, true);
-                return id;
-            }
-            return origRaf.call(window, cb);
-        };
-
-        window.cancelAnimationFrame = (handle: number) => {
-            if (fakeHandles.has(handle)) {
-                fakeHandles.delete(handle);
-                return;
-            }
-            origCaf.call(window, handle);
-        };
     },
 
     restoreRafReduction() {
-        if (this.originals.rAF) {
-            window.requestAnimationFrame = this.originals.rAF;
-            this.originals.rAF = undefined;
-        }
-        if (this.originals.cAF) {
-            window.cancelAnimationFrame = this.originals.cAF;
-            this.originals.cAF = undefined;
-        }
-        this.rafFakeHandles.clear();
     },
 
     installNetworkLayer() {
@@ -851,7 +796,6 @@ export default definePlugin({
         this.originals.fetch = window.fetch;
 
         const cacheEnabled = settings.store.networkCache;
-        const concurrencyLimit = settings.store.limitConcurrentRequests;
         const cacheMs = settings.store.networkCacheMinutes * 60 * 1000;
         const maxEntries = Math.max(10, settings.store.networkCacheMaxEntries | 0);
         const lowQuality = settings.store.forceLowImageQuality;
@@ -901,17 +845,6 @@ export default definePlugin({
             }
         };
 
-        const queue: Array<() => void> = [];
-        let active = 0;
-
-        const dequeue = () => {
-            active--;
-            if (queue.length > 0 && active < concurrencyLimit) {
-                const next = queue.shift();
-                if (next) next();
-            }
-        };
-
         window.fetch = function patched(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
             const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
             const finalUrl = rewriteSize(rawUrl);
@@ -936,29 +869,15 @@ export default definePlugin({
                 ? (typeof input === "string" ? finalUrl : new Request(finalUrl, input instanceof Request ? input : undefined))
                 : input;
 
-            const doFetch = () => {
-                active++;
-                return originalFetch(target, init).then(res => {
-                    if (useCache && res.ok) {
-                        const cacheKey = normalizeCacheKey(finalUrl);
-                        cache.set(cacheKey, { response: res.clone(), timestamp: Date.now() });
-                        touch(cacheKey);
-                        evict();
-                    }
-                    if (concurrencyLimit > 0) dequeue();
-                    return res;
-                }, err => {
-                    if (concurrencyLimit > 0) dequeue();
-                    throw err;
-                });
-            };
-
-            if (concurrencyLimit > 0 && active >= concurrencyLimit) {
-                return new Promise<Response>((resolve, reject) => {
-                    queue.push(() => { doFetch().then(resolve, reject); });
-                });
-            }
-            return doFetch();
+            return originalFetch(target, init).then(res => {
+                if (useCache && res.ok) {
+                    const cacheKey = normalizeCacheKey(finalUrl);
+                    cache.set(cacheKey, { response: res.clone(), timestamp: Date.now() });
+                    touch(cacheKey);
+                    evict();
+                }
+                return res;
+            });
         };
 
         if (cacheEnabled) {
@@ -1027,12 +946,8 @@ export default definePlugin({
                             if (k) this.networkCache.delete(k);
                         }
                     }
-                    const win = window as Window & { gc?: () => void; };
-                    if (typeof win.gc === "function") {
-                        win.gc();
-                        if (settings.store.verboseLogging) logger.info(`GC triggered at heap ratio ${(ratio * 100).toFixed(1)}%`);
-                    } else if (settings.store.verboseLogging) {
-                        logger.info(`Heap ratio ${(ratio * 100).toFixed(1)}% — trimmed caches (gc unavailable)`);
+                    if (settings.store.verboseLogging) {
+                        logger.info(`Heap ratio ${(ratio * 100).toFixed(1)}% — trimmed caches`);
                     }
                 }
             } catch (err) {
@@ -1134,32 +1049,9 @@ export default definePlugin({
     },
 
     installPassiveListeners() {
-        const PASSIVE_EVENTS = new Set(["wheel", "mousewheel", "touchstart", "touchmove", "touchend"]);
-        const originalAdd = EventTarget.prototype.addEventListener;
-        this.originals.addEventListener = originalAdd;
-
-        EventTarget.prototype.addEventListener = function patched(
-            this: EventTarget,
-            type: string,
-            listener: EventListenerOrEventListenerObject | null,
-            options?: boolean | AddEventListenerOptions
-        ): void {
-            if (PASSIVE_EVENTS.has(type) && listener != null) {
-                if (typeof options === "boolean" || options === undefined) {
-                    options = { capture: !!options, passive: true };
-                } else if (options.passive === undefined) {
-                    options = { ...options, passive: true };
-                }
-            }
-            return originalAdd.call(this, type, listener, options);
-        } as typeof EventTarget.prototype.addEventListener;
     },
 
     restorePassiveListeners() {
-        if (this.originals.addEventListener) {
-            EventTarget.prototype.addEventListener = this.originals.addEventListener;
-            this.originals.addEventListener = undefined;
-        }
     },
 
     installConsoleSuppression() {
@@ -1184,57 +1076,9 @@ export default definePlugin({
     },
 
     installResizeObserverThrottle() {
-        if (typeof ResizeObserver === "undefined") return;
-        const Native = ResizeObserver;
-        this.originals.resizeObserver = Native;
-
-        class ThrottledResizeObserver {
-            private _observer: ResizeObserver;
-            private _pendingEntries: ResizeObserverEntry[] = [];
-            private _timerId: ReturnType<typeof setTimeout> | null = null;
-            private _userCb: ResizeObserverCallback;
-
-            constructor(callback: ResizeObserverCallback) {
-                this._userCb = callback;
-                this._observer = new Native(entries => {
-                    this._pendingEntries.push(...entries);
-                    if (this._timerId !== null) return;
-                    this._timerId = setTimeout(() => {
-                        const flushed = this._pendingEntries;
-                        this._pendingEntries = [];
-                        this._timerId = null;
-                        try {
-                            this._userCb(flushed, this._observer);
-                        } catch (err) {
-                            if (settings.store.verboseLogging) logger.warn("ResizeObserver cb threw", err);
-                        }
-                    }, 0);
-                });
-            }
-
-            observe(target: Element, options?: ResizeObserverOptions) { this._observer.observe(target, options); }
-            unobserve(target: Element) { this._observer.unobserve(target); }
-            disconnect() {
-                if (this._timerId !== null) clearTimeout(this._timerId);
-                this._timerId = null;
-                this._pendingEntries = [];
-                this._observer.disconnect();
-            }
-
-            static [Symbol.hasInstance](inst: unknown) {
-                return inst instanceof Native || (inst != null && (inst as any)._observer instanceof Native);
-            }
-        }
-
-        (window as unknown as { ResizeObserver: typeof ResizeObserver; }).ResizeObserver =
-            ThrottledResizeObserver as unknown as typeof ResizeObserver;
     },
 
     restoreResizeObserverThrottle() {
-        if (this.originals.resizeObserver) {
-            (window as unknown as { ResizeObserver: typeof ResizeObserver; }).ResizeObserver = this.originals.resizeObserver;
-            this.originals.resizeObserver = undefined;
-        }
     },
 
     installGifFreezer() {
@@ -1570,7 +1414,7 @@ export default definePlugin({
         }
         if (settings.store.hideGiftButton) {
             rules.push(
-                "button[aria-label*=\"Send a gift\"], button[aria-label*=\"Gift\"], [class*=\"giftButton_\"] { display: none !important; }"
+                "button[aria-label*=\"Send a gift\"], button[aria-label*=\"Gift\"], [class*=\"giftButton_\"], [class*=\"trinketsDecoration_\"] { display: none !important; }"
             );
         }
         if (settings.store.hideStickerButton) {
@@ -1773,81 +1617,9 @@ export default definePlugin({
     },
 
     installFluxPipeline() {
-        try {
-            const { FluxDispatcher } = require("@webpack/common") as any;
-            if (!FluxDispatcher?.dispatch) return;
-
-            const original = FluxDispatcher.dispatch.bind(FluxDispatcher);
-            this.fluxDispatchOriginal = original;
-
-            const messageDelay = settings.store.debounceFluxMessages;
-            const messageQueue: any[] = [];
-            let messageTimer: ReturnType<typeof setTimeout> | null = null;
-
-            const throttledTypes: Record<string, { events: any[]; timer: ReturnType<typeof setTimeout> | null; delay: number; }> = {};
-            if (settings.store.throttlePresenceUpdates) {
-                throttledTypes["PRESENCE_UPDATES"] = { events: [], timer: null, delay: 200 };
-            }
-            if (settings.store.debounceReactionUpdates) {
-                throttledTypes["MESSAGE_REACTION_ADD"] = { events: [], timer: null, delay: 100 };
-                throttledTypes["MESSAGE_REACTION_REMOVE"] = { events: [], timer: null, delay: 100 };
-            }
-            if (settings.store.throttleVoiceStateUpdates) {
-                throttledTypes["VOICE_STATE_UPDATES"] = { events: [], timer: null, delay: 200 };
-            }
-            if (settings.store.debounceChannelSelect) {
-                throttledTypes["CHANNEL_SELECT"] = { events: [], timer: null, delay: 80 };
-            }
-
-            const self = this;
-            FluxDispatcher.dispatch = function (event: any) {
-                const type = event?.type;
-
-                if (messageDelay > 0 && type === "MESSAGE_CREATE") {
-                    messageQueue.push(event);
-                    if (messageTimer) clearTimeout(messageTimer);
-                    messageTimer = setTimeout(() => {
-                        messageTimer = null;
-                        self._fluxMessageTimer = null;
-                        const batch = messageQueue.splice(0);
-                        for (const e of batch) original(e);
-                    }, messageDelay);
-                    self._fluxMessageTimer = messageTimer;
-                    return;
-                }
-
-                const q = type && throttledTypes[type];
-                if (q) {
-                    q.events.push(event);
-                    if (q.timer) clearTimeout(q.timer);
-                    q.timer = setTimeout(() => {
-                        q.timer = null;
-                        const batch = q.events;
-                        q.events = [];
-                        for (const e of batch) original(e);
-                    }, q.delay);
-                    return;
-                }
-
-                original(event);
-            };
-        } catch (err) {
-            if (settings.store.verboseLogging) logger.warn("Failed to install flux pipeline", err);
-        }
     },
 
     teardownFluxPipeline() {
-        if (this._fluxMessageTimer !== null) {
-            clearTimeout(this._fluxMessageTimer);
-            this._fluxMessageTimer = null;
-        }
-        if (this.fluxDispatchOriginal) {
-            try {
-                const { FluxDispatcher } = require("@webpack/common") as any;
-                if (FluxDispatcher) FluxDispatcher.dispatch = this.fluxDispatchOriginal;
-            } catch { /* ignore */ }
-            this.fluxDispatchOriginal = null;
-        }
     },
 
     installPerfMetricsBlocker() {
@@ -1950,69 +1722,12 @@ export default definePlugin({
     },
 
     installIdleCallbackOptimizer() {
-        const Channel = typeof MessageChannel !== "undefined" ? new MessageChannel() : null;
-        if (!Channel) return;
-
-        this.originals.rIC = window.requestIdleCallback;
-        this.originals.cIC = window.cancelIdleCallback;
-
-        const scheduled = new Map<number, { cb: IdleRequestCallback; timer: ReturnType<typeof setTimeout> }>();
-        let nextId = 1;
-
-        Channel.port1.onmessage = (e: MessageEvent) => {
-            const entry = scheduled.get(e.data);
-            if (entry) {
-                scheduled.delete(e.data);
-                try { entry.cb({ didTimeout: false, timeRemaining: () => 16 }); } catch { /* swallow */ }
-            }
-        };
-
-        window.requestIdleCallback = ((cb: IdleRequestCallback, _opts?: { timeout?: number }) => {
-            const id = nextId++;
-            const timer = setTimeout(() => Channel.port2.postMessage(id), 0);
-            scheduled.set(id, { cb, timer });
-            return id;
-        }) as typeof window.requestIdleCallback;
-
-        window.cancelIdleCallback = ((handle: number) => {
-            const entry = scheduled.get(handle);
-            if (entry) {
-                clearTimeout(entry.timer);
-                scheduled.delete(handle);
-            }
-        }) as typeof window.cancelIdleCallback;
     },
 
     teardownIdleCallbackOptimizer() {
-        if (this.originals.rIC) {
-            window.requestIdleCallback = this.originals.rIC;
-            this.originals.rIC = undefined;
-        }
-        if (this.originals.cIC) {
-            window.cancelIdleCallback = this.originals.cIC;
-            this.originals.cIC = undefined;
-        }
     },
 
     installMessageCacheTrimmer() {
-        const intervalMs = 60_000;
-        const inactivityMs = settings.store.limitMessageCacheMinutes * 60_000;
-        this.cacheTrimTimer = setInterval(() => {
-            try {
-                const { MessageStore, ChannelStore, SelectedChannelStore } = require("@webpack/common") as any;
-                if (!MessageStore?.getCachedMessages && !MessageStore?.getMessages) return;
-                const currentId = SelectedChannelStore?.getChannelId?.();
-                const channels = ChannelStore?.getAll?.() ?? [];
-                for (const ch of channels) {
-                    if (ch.id === currentId) continue;
-                    const msgs = MessageStore.getMessages?.(ch.id);
-                    if (!msgs || typeof msgs.size !== "number") continue;
-                    if (msgs.size > 50) {
-                        MessageStore.clearCache?.(ch.id);
-                    }
-                }
-            } catch { /* silent */ }
-        }, intervalMs);
     },
 
     teardownMessageCacheTrimmer() {
