@@ -6,7 +6,7 @@
 
 import "./tooltip.css";
 
-import { Devs, TestcordDevs } from "@utils/constants";
+import { TestcordDevs } from "@utils/constants";
 import definePlugin from "@utils/types";
 import { Tooltip } from "@webpack/common";
 import { React } from "@webpack/common";
@@ -151,8 +151,3 @@ export default definePlugin({
     },
 
 });
-
-
-
-
-
