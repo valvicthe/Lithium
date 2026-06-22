@@ -1,12 +1,14 @@
 /*
- * Testcord BetterDiscord Plugin Manager - Enhanced
- * Loads and manages BetterDiscord .plugin.js files with improved compatibility
+ * Vencord, a Discord client mod
+ * Copyright (c) 2026 Vendicated and contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Logger } from "@utils/Logger";
-import { createBdApi, BdApi } from "./BdApi";
 import { Settings } from "@api/Settings";
+import { Logger } from "@utils/Logger";
 import { React } from "@webpack/common";
+
+import { createBdApi } from "./BdApi";
 
 const logger = new Logger("BDPluginManager", "#ff7373");
 
@@ -272,7 +274,7 @@ export class BDPluginManager {
                     "",
                     bdApi,
                     typeof window !== "undefined" ? window : {},
-                    { env: {}, platform: 'browser' },
+                    { env: {}, platform: "browser" },
                     typeof (window as any).DiscordNative !== "undefined" ? (window as any).DiscordNative : {}
                 );
 
