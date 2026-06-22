@@ -5,13 +5,13 @@
  */
 
 import { findGroupChildrenByChildId, NavContextMenuPatchCallback } from "@api/ContextMenu";
-import { definePluginSettings } from "@api/Settings";
 import { showNotification } from "@api/Notifications";
-import { Devs, TestcordDevs } from "@utils/constants";
+import { definePluginSettings } from "@api/Settings";
+import { TestcordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
-import { findStoreLazy } from "@webpack";
-import { ChannelStore, FluxDispatcher, Menu, RestAPI, showToast, Toasts, UserStore } from "@webpack/common";
 import { Channel } from "@vencord/discord-types";
+import { findStoreLazy } from "@webpack";
+import { ChannelStore, Menu, RestAPI, showToast, Toasts, UserStore } from "@webpack/common";
 
 // Use PrivateChannelSortStore like in other plugins
 const PrivateChannelSortStore = findStoreLazy("PrivateChannelSortStore") as { getPrivateChannelIds: () => string[]; };
@@ -315,8 +315,3 @@ export default definePlugin({
         log("Plugin LeaveAllGroups stopped");
     }
 });
-
-
-
-
-
