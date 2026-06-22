@@ -7,14 +7,12 @@
 import {
     addProfileBadge,
     BadgePosition,
-    ProfileBadge,
     removeProfileBadge
 } from "@api/Badges";
-import { addMemberListDecorator, removeMemberListDecorator } from "@api/MemberListDecorators";
 import { addMessageDecoration, removeMessageDecoration } from "@api/MessageDecorations";
 import { definePluginSettings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
-import { Devs, TestcordDevs } from "@utils/constants";
+import { TestcordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
 
 import { getBadges, RelationshipIndicator } from "./utils";
@@ -81,8 +79,3 @@ export default definePlugin({
         });
     },
 });
-
-
-
-
-
