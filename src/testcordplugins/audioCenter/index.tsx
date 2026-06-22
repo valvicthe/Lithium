@@ -4,21 +4,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { definePluginSettings } from "@api/Settings";
 import { showNotification } from "@api/Notifications";
-import { findByPropsLazy, findStoreLazy } from "@webpack";
-import {
-    React,
-    MediaEngineStore,
-    FluxDispatcher,
-    Forms,
-    Select,
-    Slider,
-    Button,
-} from "@webpack/common";
+import { definePluginSettings } from "@api/Settings";
+import { TestcordDevs } from "@utils/constants";
 import { identity } from "@utils/misc";
 import definePlugin, { OptionType } from "@utils/types";
-import { TestcordDevs } from "@utils/constants";
+import { findByPropsLazy } from "@webpack";
+import {
+    Button,
+    FluxDispatcher,
+    Forms,
+    React,
+    Select,
+} from "@webpack/common";
 
 const configModule = findByPropsLazy("getOutputVolume");
 
@@ -258,7 +256,7 @@ function addDirectPatch() {
         console.log("AudioCenter: Adding direct patch...");
 
         // Use Vencord's patch API
-        const Patcher = (Vencord as any).Patcher;
+        const { Patcher } = (Vencord as any);
 
         // Directly patch device selection components
         const patchHandle = Patcher.addPatch({
@@ -374,7 +372,7 @@ async function createVirtualInputDevice() {
             );
             _patchRestores.push(() => { navigator.mediaDevices.getUserMedia = wrappedGetUserMedia; });
 
-            navigator.mediaDevices.getUserMedia = async (constraints) => {
+            navigator.mediaDevices.getUserMedia = async constraints => {
                 console.log("AudioCenter: getUserMedia called with:", constraints);
 
                 // If it's a request for the virtual device
@@ -425,7 +423,7 @@ function setVirtualDeviceAsOutput() {
             .then(() => {
                 console.log("AudioCenter: Virtual stream playing");
             })
-            .catch((error) => {
+            .catch(error => {
                 console.error("AudioCenter: Error playing stream:", error);
             });
 
@@ -446,7 +444,7 @@ function setVirtualDeviceAsOutput() {
                 .then(() => {
                     console.log("AudioCenter: SinkId set successfully");
                 })
-                .catch((error) => {
+                .catch(error => {
                     console.error("AudioCenter: Error setting sinkId:", error);
                 });
         }
@@ -461,7 +459,7 @@ function setVirtualDeviceAsOutput() {
                 .then(() => {
                     console.log("AudioCenter: SinkId set on audio context successfully");
                 })
-                .catch((error) => {
+                .catch(error => {
                     console.error(
                         "AudioCenter: Error setting sinkId on audio context:",
                         error
@@ -496,7 +494,7 @@ async function createAudioMixer(
             throw new Error("Unable to create virtual device");
         }
 
-        const audioContext = virtualOutputDevice.audioContext;
+        const { audioContext } = virtualOutputDevice;
         console.log(
             "AudioCenter: Virtual device audio context used:",
             audioContext.state
@@ -638,10 +636,10 @@ function stopAudioMixing() {
 
     try {
         if (mixerState.primaryStream) {
-            mixerState.primaryStream.getTracks().forEach((track) => track.stop());
+            mixerState.primaryStream.getTracks().forEach(track => track.stop());
         }
         if (mixerState.secondaryStream) {
-            mixerState.secondaryStream.getTracks().forEach((track) => track.stop());
+            mixerState.secondaryStream.getTracks().forEach(track => track.stop());
         }
 
         if (mixerState.audioContext) {
@@ -750,8 +748,8 @@ async function runFullDiagnostic() {
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 console.log("- Total number of devices:", devices.length);
 
-                const audioInputs = devices.filter((d) => d.kind === "audioinput");
-                const audioOutputs = devices.filter((d) => d.kind === "audiooutput");
+                const audioInputs = devices.filter(d => d.kind === "audioinput");
+                const audioOutputs = devices.filter(d => d.kind === "audiooutput");
 
                 console.log("- Audio input devices:", audioInputs.length);
                 audioInputs.forEach((device, index) => {
@@ -827,7 +825,7 @@ async function runFullDiagnostic() {
                     },
                 });
                 console.log("- Microphone access successful");
-                testStream.getTracks().forEach((track) => track.stop());
+                testStream.getTracks().forEach(track => track.stop());
             } catch (error) {
                 console.log("- Microphone permissions not granted (normal)");
             }
@@ -889,8 +887,8 @@ function PrimaryDeviceSelector() {
                 label: `🎤 ${device.name}`,
             }))}
             serialize={identity}
-            isSelected={(value) => value === selectedPrimaryDevice}
-            select={(id) => {
+            isSelected={value => value === selectedPrimaryDevice}
+            select={id => {
                 console.log("AudioCenter: Primary device selected:", id);
                 selectedPrimaryDevice = id;
             }}
@@ -935,8 +933,8 @@ function SecondaryDeviceSelector() {
                 label: `🎵 ${device.name}`,
             }))}
             serialize={identity}
-            isSelected={(value) => value === selectedSecondaryDevice}
-            select={(id) => {
+            isSelected={value => value === selectedSecondaryDevice}
+            select={id => {
                 console.log("AudioCenter: Secondary device selected:", id);
                 selectedSecondaryDevice = id;
             }}
@@ -1153,10 +1151,10 @@ export default definePlugin({
         if (navigator.permissions) {
             navigator.permissions
                 .query({ name: "microphone" as PermissionName })
-                .then((result) => {
+                .then(result => {
                     console.log("AudioCenter: Microphone permission:", result.state);
                 })
-                .catch((error) => {
+                .catch(error => {
                     console.error(
                         "AudioCenter: Error checking microphone permissions:",
                         error
@@ -1184,7 +1182,7 @@ export default definePlugin({
         if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
             navigator.mediaDevices
                 .enumerateDevices()
-                .then((devices) => {
+                .then(devices => {
                     console.log("AudioCenter: System devices detected:", devices.length);
                     devices.forEach((device, index) => {
                         console.log(`AudioCenter: System device ${index}:`, {
@@ -1195,7 +1193,7 @@ export default definePlugin({
                         });
                     });
                 })
-                .catch((error) => {
+                .catch(error => {
                     console.error("AudioCenter: Error enumerating devices:", error);
                 });
         }
