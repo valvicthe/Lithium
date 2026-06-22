@@ -12,8 +12,8 @@ import { EquicordDevs } from "@utils/constants";
 import { ModalContent, ModalFooter, ModalHeader, ModalProps, ModalRoot, ModalSize, openModal } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
 import { Channel, User, VoiceState } from "@vencord/discord-types";
-import { findByPropsLazy, findStoreLazy } from "@webpack";
-import { Button, ChannelStore, Forms, GuildStore, Menu, React, RelationshipStore, Toasts, UserStore, VoiceStateStore } from "@webpack/common";
+import { findByPropsLazy } from "@webpack";
+import { Button, ChannelStore, GuildStore, Menu, React, RelationshipStore, Toasts, UserStore, VoiceStateStore } from "@webpack/common";
 
 // ─── Webpack ──────────────────────────────────────────────────────────────────
 
@@ -573,4 +573,3 @@ export default definePlugin({
         }
     }
 });
-
