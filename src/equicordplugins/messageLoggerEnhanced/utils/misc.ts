@@ -100,7 +100,7 @@ export function clearMessageClassCache() {
 export function messageJsonToMessageClass(log: { message: LoggedMessageJSON; }) {
     if (!log?.message) return null;
 
-    const id = log.message.id;
+    const { id } = log.message;
     const cached = messageClassCache.get(id);
     if (cached) return cached;
 
