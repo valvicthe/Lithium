@@ -47,7 +47,6 @@ function generateUploadId(): string {
     return `upload-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-
 function createCloneableStore(initialState: any) {
     const store = { ...initialState };
     const listeners: (() => void)[] = [];
@@ -77,7 +76,6 @@ function createCloneableStore(initialState: any) {
         subscribe
     };
 }
-
 
 // Helper function to safely get error messages
 function getErrorMessage(error: unknown): string {
@@ -1442,7 +1440,6 @@ setUploadFunction(handleSmallFileUpload);
 // Set the Nitro limit checker for dragDrop.ts to use
 setNitroLimitChecker(shouldUseNativeUpload);
 
-
 export default definePlugin({
     name: "BigFileUpload",
     description: "Bypass Discord's upload limit by uploading to external file uploaders via drag-drop, paste, or the Upload button.",
@@ -1450,7 +1447,6 @@ export default definePlugin({
     authors: [Devs.ScattrdBlade],
     settings,
     dependencies: ["CommandsAPI"],
-
 
     patches: [
         {
@@ -1463,7 +1459,6 @@ export default definePlugin({
             }
         }
     ],
-
 
     start() {
         // Start progress polling for the progress bar
