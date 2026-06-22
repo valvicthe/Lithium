@@ -133,5 +133,3 @@ export function makeEmptyOverride(): SoundOverride {
         selectedSound: "default"
     };
 }
-
-
