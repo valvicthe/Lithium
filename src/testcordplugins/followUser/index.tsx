@@ -7,7 +7,7 @@
 import { NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { definePluginSettings, useSettings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
-import { Devs, TestcordDevs } from "@utils/constants";
+import { TestcordDevs } from "@utils/constants";
 import { LazyComponent } from "@utils/lazyReact";
 import { classes } from "@utils/misc";
 import definePlugin, { OptionType } from "@utils/types";
@@ -386,8 +386,3 @@ export default definePlugin({
         ];
     },
 });
-
-
-
-
-
