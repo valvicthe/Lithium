@@ -17,7 +17,7 @@ let DecorationGridItem: React.ComponentType<any> | null = null;
 let DecorationGridDecoration: React.ComponentType<any> | null = null;
 let AvatarDecorationModalPreview: React.ComponentType<any> | null = null;
 
-import { getCachedTarget, getManualProfile, isActive, isCurrentUser, loadData, loadTarget, logger, makeDateForUser, makeDateInRange, restoreManualProfileIfNeeded, restoreStoredTarget, setEnabled, settings, subscribe } from "./data";
+import { getCachedTarget, getManualProfile, isActive, isCurrentUser, loadData, loadTarget, logger, makeDateInRange, restoreManualProfileIfNeeded, restoreStoredTarget, setEnabled, settings, subscribe } from "./data";
 import { FakeUserProfileModal, setCapturedComponents } from "./modal";
 
 const FLAG_BADGES: { flag: number; image: string; description: string; }[] = [
