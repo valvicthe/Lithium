@@ -318,4 +318,3 @@ export default definePlugin({
         removeChannelToolbarButton("ChatGPTWriting");
     },
 });
-
