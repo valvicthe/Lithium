@@ -144,4 +144,3 @@ const plugin = definePlugin({
 });
 
 export default plugin;
-
