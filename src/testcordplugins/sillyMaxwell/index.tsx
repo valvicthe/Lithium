@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { sleep } from "@utils/index";
 import { TestcordDevs } from "@utils/constants";
+import { sleep } from "@utils/index";
 import definePlugin from "@utils/types";
-
 
 import { settings } from "./settings";
 
@@ -37,7 +36,6 @@ export default definePlugin({
             gifElement = document.querySelector(".moving-gif");
         }
     }
-
 
 });
 
@@ -95,7 +93,3 @@ export async function addGifToScreen() {
 
     if (maxwellRunning) timeToGetReallySilly();
 }
-
-
-
-
