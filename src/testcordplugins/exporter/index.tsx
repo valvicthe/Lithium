@@ -7,7 +7,7 @@
 import { ChatBarButton } from "@api/ChatButtons";
 import { addChannelToolbarButton, addHeaderBarButton, ChannelToolbarButton, HeaderBarButton, removeChannelToolbarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { definePluginSettings } from "@api/Settings";
-import { Devs, TestcordDevs } from "@utils/constants";
+import { TestcordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
 import { Message } from "@vencord/discord-types";
 import { ChannelStore, Constants, ContextMenuApi, Menu, React, RestAPI, Toasts } from "@webpack/common";
@@ -237,8 +237,3 @@ export default definePlugin({
         removeChannelToolbarButton("Exporter");
     },
 });
-
-
-
-
-
