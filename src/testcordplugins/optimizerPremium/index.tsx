@@ -152,7 +152,7 @@ const settings = definePluginSettings({
     },
     throttleResizeObservers: {
         type: OptionType.BOOLEAN,
-        description: "Coalesce ResizeObserver callbacks via rAF. Prevents layout thrash during window resize and dynamic UI changes.",
+        description: "Coalesce ResizeObserver callbacks via requestAnimationFrame. Prevents layout thrash during window resize and dynamic UI changes.",
         default: true,
         restartNeeded: true
     },
@@ -227,7 +227,7 @@ const settings = definePluginSettings({
     },
     suppressEmbedPreviews: {
         type: OptionType.BOOLEAN,
-        description: "Stop link preview (embed) auto-generation from the client side. Reduces network and DOM cost. Actual link previews from other users still show.",
+        description: "Hide rich embed previews in chat. Reduces DOM, image decode and paint cost in embed-heavy channels.",
         default: false,
         restartNeeded: true
     },
@@ -554,9 +554,10 @@ const settings = definePluginSettings({
     },
     disableLinkPreviews: {
         type: OptionType.BOOLEAN,
-        description: "Disable client-side link preview generation. Stops fetch/parse of OpenGraph metadata for pasted URLs.",
+        description: "Deprecated. Use Hide rich embed previews instead.",
         default: false,
-        restartNeeded: true
+        restartNeeded: true,
+        hidden: true
     },
     containGuildList: {
         type: OptionType.BOOLEAN,
@@ -584,7 +585,7 @@ const settings = definePluginSettings({
     },
     throttleFluxDispatches: {
         type: OptionType.BOOLEAN,
-        description: "Debounce high-frequency flux dispatches (typing, presence, voice states). Prevents React re-render storms from status spam in large servers.",
+        description: "Debounce typing flux dispatches. Prevents small React re-render storms without dropping presence or voice updates.",
         default: false
     },
     killReactionRendering: {
@@ -620,8 +621,9 @@ const settings = definePluginSettings({
     },
     coalesceReactionCounters: {
         type: OptionType.BOOLEAN,
-        description: "Batch reaction count DOM updates into a single mutation per frame. Prevents layout thrash when many reactions arrive on the same message simultaneously.",
-        default: false
+        description: "Deprecated. Reaction counts are already batched by Discord, so this no longer changes behavior.",
+        default: false,
+        hidden: true
     },
     disableInvitePreviews: {
         type: OptionType.BOOLEAN,
@@ -754,7 +756,7 @@ export default definePlugin({
     lazyIframeObserver: null as IntersectionObserver | null,
     lazyIframeMutationObserver: null as MutationObserver | null,
     mediaMutationObserver: null as MutationObserver | null,
-    pausedMedia: new WeakSet<HTMLMediaElement>(),
+    pausedMedia: new Set<HTMLMediaElement>(),
     optimizerStyleEl: null as HTMLStyleElement | null,
     extraStyleEl: null as HTMLStyleElement | null,
     domThrottleStyleEl: null as HTMLStyleElement | null,
@@ -781,8 +783,7 @@ export default definePlugin({
     originalPassiveListener: null as typeof EventTarget.prototype.addEventListener | null,
     originalIdleCallback: null as typeof requestIdleCallback | null,
     originalCancelIdleCallback: null as typeof cancelIdleCallback | null,
-    originalRoObserve: null as ((this: ResizeObserver, target: Element, options?: ResizeObserverOptions) => void) | null,
-    originalRoUnobserve: null as ((this: ResizeObserver, target: Element) => void) | null,
+    originalResizeObserver: null as typeof ResizeObserver | null,
     originalConsoleWarn: null as typeof console.warn | null,
     originalConsoleGroup: null as typeof console.group | null,
     originalConsoleGroupEnd: null as typeof console.groupEnd | null,
@@ -793,7 +794,7 @@ export default definePlugin({
     originalConsoleDir: null as typeof console.dir | null,
     originalConsoleDirxml: null as typeof console.dirxml | null,
     activeFetchCount: 0,
-    fetchQueue: [] as Array<{ target: RequestInfo | URL; init?: RequestInit; resolve: (v: Response) => void; reject: (v: any) => void }>,
+    fetchQueue: [] as Array<{ target: RequestInfo | URL; init?: RequestInit; resolve: (v: Response) => void; reject: (v: unknown) => void }>,
     originalScrollTo: null as typeof window.scrollTo | null,
     rICMessagePort: null as MessagePort | null,
     suppressConsoleWarnEl: null as HTMLStyleElement | null,
@@ -1028,19 +1029,30 @@ export default definePlugin({
         const skip = settings.store.animationFrameReduction;
         if (skip <= 0) return;
         this.originalRaf = window.requestAnimationFrame.bind(window);
-        let frame = 0;
-        const threshold = Math.min(skip, 99);
+        const minInterval = 1000 / (60 * (1 - Math.min(skip, 95) / 100));
+        let lastFrame = 0;
         window.requestAnimationFrame = ((cb: FrameRequestCallback) => {
-            frame++;
             const { originalRaf } = this;
             if (!originalRaf) return 0;
             if (document.activeElement?.closest("[data-slate-editor]")) return originalRaf(cb);
-            if ((frame % 100) >= threshold) {
-                return originalRaf(cb);
-            }
-            return 0;
+            return originalRaf(time => {
+                const remaining = minInterval - (time - lastFrame);
+                if (remaining <= 0) {
+                    lastFrame = time;
+                    cb(time);
+                    return;
+                }
+                setTimeout(() => {
+                    const { originalRaf: raf } = this;
+                    if (!raf) return;
+                    raf(nextTime => {
+                        lastFrame = nextTime;
+                        cb(nextTime);
+                    });
+                }, remaining);
+            });
         }) as typeof requestAnimationFrame;
-        if (settings.store.verboseLogging) logger.info(`rAF reduction active: skipping ${threshold}% of frames`);
+        if (settings.store.verboseLogging) logger.info(`rAF reduction active: target ${Math.round(1000 / minInterval)}fps`);
     },
 
     restoreRafReduction() {
@@ -1279,6 +1291,10 @@ export default definePlugin({
             this.mediaMutationObserver.disconnect();
             this.mediaMutationObserver = null;
         }
+        for (const media of this.pausedMedia) {
+            if (media.isConnected) media.play().catch(() => undefined);
+        }
+        this.pausedMedia.clear();
     },
 
     installCSSOptimizations() {
@@ -1357,26 +1373,43 @@ export default definePlugin({
     },
 
     installResizeObserverThrottle() {
-        const origObserve = ResizeObserver.prototype.observe;
-        const origUnobserve = ResizeObserver.prototype.unobserve;
-        this.originalRoObserve = origObserve;
-        this.originalRoUnobserve = origUnobserve;
-        ResizeObserver.prototype.observe = function (this: ResizeObserver, target: Element, options?: ResizeObserverOptions) {
-            return origObserve.call(this, target, options);
-        } as typeof ResizeObserver.prototype.observe;
-        ResizeObserver.prototype.unobserve = function (this: ResizeObserver, target: Element) {
-            return origUnobserve.call(this, target);
-        } as typeof ResizeObserver.prototype.unobserve;
+        if (typeof ResizeObserver === "undefined") return;
+        const NativeResizeObserver = ResizeObserver;
+        const frames = new WeakMap<ResizeObserver, number>();
+        const pendingEntries = new WeakMap<ResizeObserver, ResizeObserverEntry[]>();
+        this.originalResizeObserver = NativeResizeObserver;
+
+        window.ResizeObserver = class extends NativeResizeObserver {
+            constructor(callback: ResizeObserverCallback) {
+                super((entries, currentObserver) => {
+                    pendingEntries.set(currentObserver, entries);
+                    if (frames.has(currentObserver)) return;
+                    const frame = requestAnimationFrame(() => {
+                        frames.delete(currentObserver);
+                        const pending = pendingEntries.get(currentObserver) ?? [];
+                        pendingEntries.delete(currentObserver);
+                        callback(pending, currentObserver);
+                    });
+                    frames.set(currentObserver, frame);
+                });
+            }
+
+            disconnect() {
+                const frame = frames.get(this);
+                if (frame) {
+                    cancelAnimationFrame(frame);
+                    frames.delete(this);
+                }
+                pendingEntries.delete(this);
+                super.disconnect();
+            }
+        };
     },
 
     restoreResizeObserverThrottle() {
-        if (this.originalRoObserve) {
-            ResizeObserver.prototype.observe = this.originalRoObserve;
-            this.originalRoObserve = null;
-        }
-        if (this.originalRoUnobserve) {
-            ResizeObserver.prototype.unobserve = this.originalRoUnobserve;
-            this.originalRoUnobserve = null;
+        if (this.originalResizeObserver) {
+            window.ResizeObserver = this.originalResizeObserver;
+            this.originalResizeObserver = null;
         }
     },
 
@@ -1809,7 +1842,7 @@ export default definePlugin({
         }
         if (settings.store.forceScrollBehavior) {
             rules.push(
-                "[class*=\"scroller_\"], [class*=\"scrollingContainer_\"] { overflow-anchor: none; }"
+                "[class*=\"scroller_\"], [class*=\"scrollingContainer_\"] { scroll-behavior: auto !important; overflow-anchor: none; }"
             );
         }
         if (settings.store.overscrollContain) {
@@ -1993,8 +2026,22 @@ export default definePlugin({
     installPerfMetricsBlocker() {
         this.originals._perfMark = performance.mark.bind(performance);
         this.originals._perfMeasure = performance.measure.bind(performance);
-        performance.mark = (() => { }) as any;
-        performance.measure = (() => Promise.resolve(undefined)) as any;
+        performance.mark = markName => ({
+            detail: null,
+            duration: 0,
+            entryType: "mark",
+            name: markName,
+            startTime: performance.now(),
+            toJSON() { return this; }
+        });
+        performance.measure = measureName => ({
+            detail: null,
+            duration: 0,
+            entryType: "measure",
+            name: measureName,
+            startTime: performance.now(),
+            toJSON() { return this; }
+        });
     },
 
     teardownPerfMetricsBlocker() {
@@ -2324,11 +2371,12 @@ export default definePlugin({
     },
 
     installAnimatedAvatarOptimizer() {
+        const isAvatar = (img: HTMLImageElement) => img.matches("img[class*=\"avatar\"]") || img.closest("[class*=\"avatar\"]") !== null;
         const freeze = (img: HTMLImageElement) => {
             if (img.dataset.opAvFrozen === "1") return;
             const src = img.src || img.currentSrc;
             if (!src || !/\/(?:a_|[0-9]+\.gif)/.test(src)) return;
-            if (!img.classList.contains("avatar") && !img.closest("[class*=\"avatar\"]")) return;
+            if (!isAvatar(img)) return;
             img.dataset.opAvFrozen = "1";
             const staticSrc = src.replace(/\.gif(?:\?.*)?$/, ".png").replace(/\?size=\d+/, "?size=80");
             const originalSrc = src;
@@ -2349,7 +2397,7 @@ export default definePlugin({
             for (const r of records) {
                 for (const node of r.addedNodes) {
                     if (!(node instanceof Element)) continue;
-                    if (node instanceof HTMLImageElement && node.classList.contains("avatar")) freeze(node);
+                    if (node instanceof HTMLImageElement && isAvatar(node)) freeze(node);
                     else node.querySelectorAll<HTMLImageElement>("img[class*=\"avatar\"]").forEach(freeze);
                 }
             }
@@ -2380,11 +2428,12 @@ export default definePlugin({
     },
 
     installAvatarQualityReducer() {
+        const isAvatar = (img: HTMLImageElement) => img.matches("img[class*=\"avatar\"]") || img.closest("[class*=\"avatar\"], [class*=\"member\"]") !== null;
         const rewrite = (img: HTMLImageElement) => {
             if (img.dataset.opAvQuality === "1") return;
             const src = img.src || img.currentSrc;
             if (!src.includes("cdn.discord") && !src.includes("media.discord")) return;
-            if (!img.classList.contains("avatar") && !img.closest("[class*=\"avatar\"]") && !img.closest("[class*=\"member\"]")) return;
+            if (!isAvatar(img)) return;
             img.dataset.opAvQuality = "1";
             try {
                 const url = new URL(src, window.location.origin);
@@ -2400,7 +2449,7 @@ export default definePlugin({
             for (const r of records) {
                 for (const node of r.addedNodes) {
                     if (!(node instanceof Element)) continue;
-                    if (node instanceof HTMLImageElement && (node.classList.contains("avatar") || node.closest("[class*=\"member\"]"))) rewrite(node);
+                    if (node instanceof HTMLImageElement && isAvatar(node)) rewrite(node);
                     else node.querySelectorAll<HTMLImageElement>("img[class*=\"avatar\"], [class*=\"member\"] img").forEach(rewrite);
                 }
             }
@@ -2569,7 +2618,7 @@ export default definePlugin({
 
     installFluxThrottle() {
         const origDispatch = FluxDispatcher.dispatch.bind(FluxDispatcher);
-        const THROTTLED = new Set(["TYPING_START", "TYPING_STOP", "PRESENCE_UPDATES", "PRESENCE_UPDATE", "VOICE_STATE_UPDATES"]);
+        const THROTTLED = new Set(["TYPING_START", "TYPING_STOP"]);
         const timers = new Map<string, ReturnType<typeof setTimeout>>();
         const DEBOUNCE_MS = 120;
         (window as any).__op_fluxState = { origDispatch, timers };
@@ -2694,40 +2743,10 @@ export default definePlugin({
     },
 
     installReactionCoalescer() {
-        let framePending = false;
-        const queue = this.coalesceQueue;
-        const plugin = this;
-        const apply = () => {
-            for (const [key, count] of queue) {
-                const el = document.querySelector<HTMLElement>(`[data-op-reaction-key="${key}"]`);
-                if (el) el.textContent = String(count);
-            }
-            queue.clear();
-            framePending = false;
-            plugin.coalesceTimer = null;
-        };
-        const origDispatch = FluxDispatcher.dispatch.bind(FluxDispatcher);
-        (window as any).__op_coalesceOrig = origDispatch;
-        FluxDispatcher.dispatch = function (payload: { type: string; messageId?: string; emoji?: { name: string }; count?: number }) {
-            if (payload.type === "MESSAGE_REACTION_ADD" || payload.type === "MESSAGE_REACTION_REMOVE") {
-                const key = `${payload.messageId}_${payload.emoji?.name}`;
-                if (payload.count !== undefined) queue.set(key, payload.count);
-                if (!framePending) {
-                    framePending = true;
-                    plugin.coalesceTimer = requestAnimationFrame(apply);
-                }
-                return origDispatch(payload);
-            }
-            return origDispatch(payload);
-        } as typeof FluxDispatcher.dispatch;
+        if (settings.store.verboseLogging) logger.info("Reaction coalescer skipped because Discord already batches reaction count renders");
     },
 
     teardownReactionCoalescer() {
-        const orig = (window as any).__op_coalesceOrig;
-        if (orig) {
-            FluxDispatcher.dispatch = orig;
-            delete (window as any).__op_coalesceOrig;
-        }
         this.coalesceQueue.clear();
         if (this.coalesceTimer !== null) {
             cancelAnimationFrame(this.coalesceTimer);
