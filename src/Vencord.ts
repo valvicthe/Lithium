@@ -237,8 +237,8 @@ if (!IS_DEV) {
         const msg = String(message);
         if (msg.includes("startsWith") || msg.includes("Cannot read properties")) return true;
     };
-    window.addEventListener("unhandledrejection", (e) => {
-        const reason = e.reason;
+    window.addEventListener("unhandledrejection", e => {
+        const { reason } = e;
         if (reason?.message?.includes?.("startsWith")) e.preventDefault();
     });
 }
