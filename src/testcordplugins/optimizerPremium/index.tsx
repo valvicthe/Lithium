@@ -627,6 +627,11 @@ const settings = definePluginSettings({
         description: "Freeze member list DOM with paint/layout containment so presence changes, voice states, and status updates don't trigger repaints. Unfreezes briefly every 3 minutes to batch-refresh. Massive smoothness gain in large servers.",
         default: false
     },
+    freezeWhenUnfocused: {
+        type: OptionType.BOOLEAN,
+        description: "Pause all CSS animations and transitions while the window is hidden/backgrounded. Stops the client burning CPU+GPU on offscreen animation; everything resumes on refocus.",
+        default: true
+    },
 });
 
 interface CacheEntry {
@@ -796,6 +801,8 @@ export default definePlugin({
     memberFreezeRefreshTimer: null as ReturnType<typeof setTimeout> | null,
     websocketPatchEl: null as HTMLStyleElement | null,
     spellcheckObserver: null as MutationObserver | null,
+    unfocusedFreezeStyleEl: null as HTMLStyleElement | null,
+    unfocusedVisibilityHandler: null as (() => void) | null,
 
     start() {
         if (settings.store.verboseLogging) logger.info("Starting optimizer suite");
@@ -843,6 +850,7 @@ export default definePlugin({
         try { if (settings.store.disableInvitePreviews) this.installInvitePreviewKiller(); } catch (e) { logger.warn("installInvitePreviewKiller failed", e); }
         try { if (settings.store.unifiedMemberListGradient) this.installMemberListGradient(); } catch (e) { logger.warn("installMemberListGradient failed", e); }
         try { if (settings.store.freezeMemberList) this.installMemberFreezer(); } catch (e) { logger.warn("installMemberFreezer failed", e); }
+        try { if (settings.store.freezeWhenUnfocused) this.installUnfocusedFreezer(); } catch (e) { logger.warn("installUnfocusedFreezer failed", e); }
         try { if (settings.store.killVoiceVideo) this.installVoiceVideoKiller(); } catch (e) { logger.warn("installVoiceVideoKiller failed", e); }
         try { if (settings.store.preventWebSocketFlood) this.installWebSocketFloodPreventer(); } catch (e) { logger.warn("installWebSocketFloodPreventer failed", e); }
         try { this.installExtraCSS(); } catch (e) { logger.warn("installExtraCSS failed", e); }
@@ -905,6 +913,7 @@ export default definePlugin({
         this.teardownInvitePreviewKiller();
         this.teardownMemberListGradient();
         this.teardownMemberFreezer();
+        this.teardownUnfocusedFreezer();
         this.teardownVoiceVideoKiller();
         this.teardownWebSocketFloodPreventer();
 
@@ -2813,6 +2822,38 @@ export default definePlugin({
         if (this.memberFreezeEl) {
             this.memberFreezeEl.remove();
             this.memberFreezeEl = null;
+        }
+    },
+
+    installUnfocusedFreezer() {
+        const apply = () => {
+            if (document.hidden) {
+                if (!this.unfocusedFreezeStyleEl) {
+                    const el = document.createElement("style");
+                    el.id = "op-unfocused-freeze";
+                    // play-state:paused freezes running animations in place; they resume (not restart) on refocus
+                    el.textContent = "*,*::before,*::after{animation-play-state:paused!important;transition:none!important}";
+                    document.head.appendChild(el);
+                    this.unfocusedFreezeStyleEl = el;
+                }
+            } else if (this.unfocusedFreezeStyleEl) {
+                this.unfocusedFreezeStyleEl.remove();
+                this.unfocusedFreezeStyleEl = null;
+            }
+        };
+        this.unfocusedVisibilityHandler = apply;
+        document.addEventListener("visibilitychange", apply);
+        apply();
+    },
+
+    teardownUnfocusedFreezer() {
+        if (this.unfocusedVisibilityHandler) {
+            document.removeEventListener("visibilitychange", this.unfocusedVisibilityHandler);
+            this.unfocusedVisibilityHandler = null;
+        }
+        if (this.unfocusedFreezeStyleEl) {
+            this.unfocusedFreezeStyleEl.remove();
+            this.unfocusedFreezeStyleEl = null;
         }
     },
 });

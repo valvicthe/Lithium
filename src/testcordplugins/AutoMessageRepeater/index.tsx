@@ -129,6 +129,8 @@ function scheduleNextMessage(entry: MessageEntry) {
     }
 
     const timerId = setTimeout(async () => {
+        // Drop this fired handle so activeTimers only holds still-pending timers, not every timer ever created
+        activeTimers = activeTimers.filter(timer => timer !== timerId);
         await sendMessageEntry(entry);
         // Recursively schedule the next message for this specific entry
         scheduleNextMessage(entry);
@@ -154,6 +156,7 @@ async function startRepeating() {
         const initialDelay = index * 100; // 0ms, 100ms, 200ms...
 
         const timerId = setTimeout(async () => {
+            activeTimers = activeTimers.filter(timer => timer !== timerId);
             await sendMessageEntry(entry);
             // 2. After the initial send, start the individual timer loop for this entry
             scheduleNextMessage(entry);

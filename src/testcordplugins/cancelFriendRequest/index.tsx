@@ -13,6 +13,9 @@ const RelationshipActions = findByPropsLazy("removeFriend", "sendFriendRequest")
 // RelationshipType 4 = OUTGOING_REQUEST
 const OUTGOING_REQUEST = 4;
 
+// Module-scoped so stop() can clear a pending debounce timer the observer scheduled
+let scanTimer: ReturnType<typeof setTimeout> | null = null;
+
 function cancelRequest(userId: string) {
     try {
         RelationshipActions.removeFriend(userId);
@@ -126,7 +129,6 @@ export default definePlugin({
     authors: [{ name: "Nightcord", id: 0n }],
 
     start() {
-        let scanTimer: ReturnType<typeof setTimeout> | null = null;
         observer = new MutationObserver(() => {
             if (scanTimer) return;
             scanTimer = setTimeout(() => {
@@ -140,6 +142,10 @@ export default definePlugin({
     },
 
     stop() {
+        if (scanTimer) {
+            clearTimeout(scanTimer);
+            scanTimer = null;
+        }
         observer?.disconnect();
         observer = null;
         for (const btn of patchedButtons) {
