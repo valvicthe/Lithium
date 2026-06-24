@@ -106,6 +106,7 @@ const DS_STYLE_KEY = "auto-responder-global-style";
 
 let lastMessageId = "";
 const cachedGlobalStyle = "";
+const pendingResponses = new Set<ReturnType<typeof setTimeout>>();
 
 async function handleMessage(message: any) {
     if (!settings.store.isActive) return;
@@ -204,12 +205,15 @@ Reply naturally. ONLY RETURN THE TEXT OF YOUR REPLY.`;
                 TypingActions.startTyping(message.channel_id);
             } catch { }
 
-            setTimeout(async () => {
+            const timeout = setTimeout(async () => {
+                pendingResponses.delete(timeout);
+                if (!settings.store.isActive) return;
                 await RestAPI.post({
                     url: `/channels/${message.channel_id}/messages`,
                     body: { content: reply }
                 });
             }, totalDelay);
+            pendingResponses.add(timeout);
         }
     } catch (err) {
         console.error("[AutoResponder] Error:", err);
@@ -340,6 +344,8 @@ export default definePlugin({
     },
 
     stop() {
+        for (const timeout of pendingResponses) clearTimeout(timeout);
+        pendingResponses.clear();
         removeHeaderBarButton("AutoResponder");
         removeChannelToolbarButton("AutoResponder");
     }

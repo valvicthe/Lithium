@@ -104,6 +104,7 @@ export default definePlugin({
             clearInterval(this.cleanupInterval);
             this.cleanupInterval = null;
         }
+        this.messageTimestamps.clear();
         this.deletionQueue = [];
         this.isProcessingQueue = false;
         this.retryDelay = 1000;
@@ -336,6 +337,7 @@ export default definePlugin({
                         console.log("[AutoDeleteDMs] Attempting to delete message:", messageId);
                         try {
                             await DeleteMessageStore.deleteMessage(data.channelId, messageId);
+                            this.messageTimestamps.delete(messageId);
                             console.log("[AutoDeleteDMs] Successfully deleted message:", messageId);
                         } catch (error) {
                             console.error("[AutoDeleteDMs] Failed to delete message:", error);

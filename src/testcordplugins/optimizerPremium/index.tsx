@@ -44,7 +44,7 @@ const settings = definePluginSettings({
     },
     networkCache: {
         type: OptionType.BOOLEAN,
-        description: "Cache static image responses (png, jpg, webp, gif) in memory to cut redundant fetches. Bounded by entry count and TTL.",
+        description: "Cache static image responses (png, jpg, webp) in memory to cut redundant fetches. Bounded by entry count and TTL.",
         default: true
     },
     networkCacheMinutes: {
@@ -637,6 +637,7 @@ const settings = definePluginSettings({
 interface CacheEntry {
     response: Response;
     timestamp: number;
+    bytes: number;
 }
 
 interface SpringMod {
@@ -742,6 +743,8 @@ export default definePlugin({
     springs: [] as SpringMod[],
     networkCache: new Map<string, CacheEntry>(),
     networkCacheOrder: [] as string[],
+    pendingRafReduction: new Map<number, { raf?: number; timeout?: ReturnType<typeof setTimeout>; }>(),
+    nextRafReductionId: 1,
     cacheCleanupTimer: null as ReturnType<typeof setInterval> | null,
     memoryTimer: null as ReturnType<typeof setInterval> | null,
     intersectionObserver: null as IntersectionObserver | null,
@@ -772,6 +775,7 @@ export default definePlugin({
     compositingStyleEl: null as HTMLStyleElement | null,
     cacheTrimTimer: null as ReturnType<typeof setInterval> | null,
     originalRaf: null as ((cb: FrameRequestCallback) => number) | null,
+    originalCancelRaf: null as typeof cancelAnimationFrame | null,
     originalPassiveListener: null as typeof EventTarget.prototype.addEventListener | null,
     originalIdleCallback: null as typeof requestIdleCallback | null,
     originalCancelIdleCallback: null as typeof cancelIdleCallback | null,
@@ -927,16 +931,25 @@ export default definePlugin({
         if (typeof MutationObserver === "undefined") return;
 
         const callbacks = this.observerCallbacks;
+        let queued: MutationRecord[] = [];
+        let frame = 0;
+        const flush = () => {
+            frame = 0;
+            const records = queued;
+            queued = [];
+            for (const cb of callbacks.values()) {
+                try {
+                    cb(records);
+                } catch (err) {
+                    if (settings.store.verboseLogging) logger.warn("Consolidated observer callback error", err);
+                }
+            }
+        };
 
         try {
             this.consolidatedObserver = new MutationObserver(records => {
-                for (const cb of callbacks.values()) {
-                    try {
-                        cb(records);
-                    } catch (err) {
-                        if (settings.store.verboseLogging) logger.warn("Consolidated observer callback error", err);
-                    }
-                }
+                queued.push(...records);
+                if (!frame) frame = requestAnimationFrame(flush);
             });
             this.consolidatedObserver.observe(document.body, { childList: true, subtree: true });
             if (settings.store.verboseLogging) logger.info("Installed consolidated MutationObserver");
@@ -1021,36 +1034,59 @@ export default definePlugin({
         const skip = settings.store.animationFrameReduction;
         if (skip <= 0) return;
         this.originalRaf = window.requestAnimationFrame.bind(window);
+        this.originalCancelRaf = window.cancelAnimationFrame.bind(window);
         const minInterval = 1000 / (60 * (1 - Math.min(skip, 95) / 100));
         let lastFrame = 0;
         window.requestAnimationFrame = ((cb: FrameRequestCallback) => {
             const { originalRaf } = this;
             if (!originalRaf) return 0;
             if (document.activeElement?.closest("[data-slate-editor]")) return originalRaf(cb);
-            return originalRaf(time => {
+            const id = this.nextRafReductionId++;
+            const pending: { raf?: number; timeout?: ReturnType<typeof setTimeout>; } = {};
+            this.pendingRafReduction.set(id, pending);
+            pending.raf = originalRaf(time => {
                 const remaining = minInterval - (time - lastFrame);
                 if (remaining <= 0) {
+                    this.pendingRafReduction.delete(id);
                     lastFrame = time;
                     cb(time);
                     return;
                 }
-                setTimeout(() => {
+                pending.timeout = setTimeout(() => {
                     const { originalRaf: raf } = this;
-                    if (!raf) return;
-                    raf(nextTime => {
+                    if (!raf || !this.pendingRafReduction.has(id)) return;
+                    pending.raf = raf(nextTime => {
+                        this.pendingRafReduction.delete(id);
                         lastFrame = nextTime;
                         cb(nextTime);
                     });
                 }, remaining);
             });
+            return id;
         }) as typeof requestAnimationFrame;
+        window.cancelAnimationFrame = ((id: number) => {
+            const pending = this.pendingRafReduction.get(id);
+            if (!pending) return this.originalCancelRaf?.(id);
+            if (pending.raf !== undefined) this.originalCancelRaf?.(pending.raf);
+            if (pending.timeout !== undefined) clearTimeout(pending.timeout);
+            this.pendingRafReduction.delete(id);
+        }) as typeof cancelAnimationFrame;
         if (settings.store.verboseLogging) logger.info(`rAF reduction active: target ${Math.round(1000 / minInterval)}fps`);
     },
 
     restoreRafReduction() {
+        for (const pending of this.pendingRafReduction.values()) {
+            if (pending.raf !== undefined) this.originalCancelRaf?.(pending.raf);
+            if (pending.timeout !== undefined) clearTimeout(pending.timeout);
+        }
+        this.pendingRafReduction.clear();
         if (this.originalRaf) {
             window.requestAnimationFrame = this.originalRaf;
             this.originalRaf = null;
+        }
+        if (this.originalCancelRaf) {
+            window.cancelAnimationFrame = this.originalCancelRaf;
+            this.originalCancelRaf = null;
         }
     },
 
@@ -1061,10 +1097,12 @@ export default definePlugin({
         const cacheEnabled = settings.store.networkCache;
         const cacheMs = settings.store.networkCacheMinutes * 60 * 1000;
         const maxEntries = Math.max(10, settings.store.networkCacheMaxEntries | 0);
+        const maxBytes = maxEntries * 512 * 1024;
+        let cacheBytes = 0;
         const lowQuality = settings.store.forceLowImageQuality;
         const cache = this.networkCache;
         const order = this.networkCacheOrder;
-        const isImage = (url: string) => /\.(png|jpe?g|gif|webp)(?:$|[?#])/i.test(url);
+        const isImage = (url: string) => /\.(png|jpe?g|webp)(?:$|[?#])/i.test(url);
         const isDiscordCdn = (url: string) => /(?:cdn|media)\.discord(?:app)?\.(?:com|net)/.test(url);
 
         const stripCacheBusting = (u: URL) => {
@@ -1102,9 +1140,11 @@ export default definePlugin({
             order.push(key);
         };
         const evict = () => {
-            while (order.length > maxEntries) {
+            while (order.length > maxEntries || cacheBytes > maxBytes) {
                 const k = order.shift();
-                if (k) cache.delete(k);
+                if (!k) return;
+                cacheBytes -= cache.get(k)?.bytes ?? 0;
+                cache.delete(k);
             }
         };
 
@@ -1122,6 +1162,7 @@ export default definePlugin({
                     return Promise.resolve(hit.response.clone());
                 }
                 if (hit) {
+                    cacheBytes -= hit.bytes;
                     cache.delete(cacheKey);
                     const idx = order.indexOf(cacheKey);
                     if (idx !== -1) order.splice(idx, 1);
@@ -1134,10 +1175,16 @@ export default definePlugin({
 
             return originalFetch(target, init).then(res => {
                 if (useCache && res.ok) {
-                    const cacheKey = normalizeCacheKey(finalUrl);
-                    cache.set(cacheKey, { response: res.clone(), timestamp: Date.now() });
-                    touch(cacheKey);
-                    evict();
+                    const bytes = Number(res.headers.get("content-length")) || 0;
+                    if (bytes > 0 && bytes <= maxBytes) {
+                        const cacheKey = normalizeCacheKey(finalUrl);
+                        const old = cache.get(cacheKey);
+                        if (old) cacheBytes -= old.bytes;
+                        cache.set(cacheKey, { response: res.clone(), timestamp: Date.now(), bytes });
+                        cacheBytes += bytes;
+                        touch(cacheKey);
+                        evict();
+                    }
                 }
                 return res;
             });
@@ -1148,6 +1195,7 @@ export default definePlugin({
                 const now = Date.now();
                 for (const [k, v] of cache) {
                     if (now - v.timestamp > cacheMs) {
+                        cacheBytes -= v.bytes;
                         cache.delete(k);
                         const idx = order.indexOf(k);
                         if (idx !== -1) order.splice(idx, 1);
@@ -2283,6 +2331,7 @@ export default definePlugin({
             window.fetch = orig;
             (this as any).__origFetchLimited = undefined;
         }
+        for (const item of this.fetchQueue) item.reject(new Error("optimizerPremium stopped"));
         this.fetchQueue = [];
     },
 
