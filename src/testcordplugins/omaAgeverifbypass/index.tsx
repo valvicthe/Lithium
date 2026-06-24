@@ -40,7 +40,7 @@ export default definePlugin({
             find: "useAgeGateVerifyContentForGuild",
             replacement: {
                 match: /null==(\i)\.nsfwAllowed/g,
-                replace: "false",
+                replace: " false",
             },
         },
 
