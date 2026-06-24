@@ -27,7 +27,8 @@ const settings = definePluginSettings({
         description: "Delay in ms applied to throttled DOM updates. Higher delays free more CPU but make those UI bits update slower.",
         markers: [25, 50, 100, 150, 250, 500],
         default: 100,
-        stickToMarkers: false
+        stickToMarkers: false,
+        restartNeeded: true
     },
     disableSpringAnimations: {
         type: OptionType.BOOLEAN,
@@ -38,7 +39,8 @@ const settings = definePluginSettings({
         type: OptionType.SLIDER,
         description: "Drop frames from requestAnimationFrame. 0 disables, higher values skip more frames.",
         markers: [0, 25, 50, 75, 100],
-        default: 0
+        default: 0,
+        restartNeeded: true
     },
     networkCache: {
         type: OptionType.BOOLEAN,
@@ -50,14 +52,16 @@ const settings = definePluginSettings({
         description: "How long, in minutes, the network cache keeps entries before evicting them.",
         markers: [1, 5, 10, 15, 30, 60],
         default: 5,
-        stickToMarkers: false
+        stickToMarkers: false,
+        restartNeeded: true
     },
     networkCacheMaxEntries: {
         type: OptionType.SLIDER,
         description: "Hard cap on cached image entries. Oldest entries are evicted first when exceeded.",
         markers: [50, 100, 200, 500, 1000],
         default: 200,
-        stickToMarkers: false
+        stickToMarkers: false,
+        restartNeeded: true
     },
     forceLowImageQuality: {
         type: OptionType.BOOLEAN,
@@ -79,7 +83,8 @@ const settings = definePluginSettings({
         description: "Seconds between memory pressure checks.",
         markers: [10, 30, 60, 120, 300],
         default: 30,
-        stickToMarkers: false
+        stickToMarkers: false,
+        restartNeeded: true
     },
     optimizeTooltips: {
         type: OptionType.BOOLEAN,
@@ -186,13 +191,6 @@ const settings = definePluginSettings({
         description: "Cap internal plugin caches (diffs, translations, ZIP previews, logged messages, voice stats) to prevent unbounded memory growth. Disable if you have RAM to spare and want maximum cache hit rate.",
         default: true
     },
-    debounceScrollHandlers: {
-        type: OptionType.BOOLEAN,
-        description: "Debounce scroll event handlers to prevent excessive scroll-triggered updates. WARNING: May cause issues.",
-        default: false,
-        restartNeeded: true,
-        hidden: true
-    },
     lazyIframes: {
         type: OptionType.BOOLEAN,
         description: "Defer iframe loading until they scroll into view. Reduces initial page load cost. hcaptcha iframes are excluded to prevent breaking verification.",
@@ -241,7 +239,8 @@ const settings = definePluginSettings({
         description: "Cap concurrent network requests. 0 = unlimited. Prevents browser connection throttling from saturating the limit.",
         markers: [0, 6, 12, 24, 50],
         default: 0,
-        stickToMarkers: false
+        stickToMarkers: false,
+        restartNeeded: true
     },
     suppressGifAutoplay: {
         type: OptionType.BOOLEAN,
@@ -373,7 +372,8 @@ const settings = definePluginSettings({
         description: "Minutes of inactivity before a channel's message cache is trimmed.",
         markers: [5, 10, 15, 30, 60],
         default: 15,
-        stickToMarkers: false
+        stickToMarkers: false,
+        restartNeeded: true
     },
     freezeAnimatedAvatars: {
         type: OptionType.BOOLEAN,
@@ -552,13 +552,6 @@ const settings = definePluginSettings({
         description: "Suppress drag-and-drop event handling overhead. Reduces mousemove processing cost.",
         default: false
     },
-    disableLinkPreviews: {
-        type: OptionType.BOOLEAN,
-        description: "Deprecated. Use Hide rich embed previews instead.",
-        default: false,
-        restartNeeded: true,
-        hidden: true
-    },
     containGuildList: {
         type: OptionType.BOOLEAN,
         description: "Force content-visibility on guild/sever list items. Stronger than containServerList layout containment.",
@@ -618,12 +611,6 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Remove server folder expand/collapse transition animations. Stops layout recalculations during folder interactions.",
         default: false
-    },
-    coalesceReactionCounters: {
-        type: OptionType.BOOLEAN,
-        description: "Deprecated. Reaction counts are already batched by Discord, so this no longer changes behavior.",
-        default: false,
-        hidden: true
     },
     disableInvitePreviews: {
         type: OptionType.BOOLEAN,
@@ -793,7 +780,6 @@ export default definePlugin({
     originalConsoleAssert: null as typeof console.assert | null,
     originalConsoleDir: null as typeof console.dir | null,
     originalConsoleDirxml: null as typeof console.dirxml | null,
-    activeFetchCount: 0,
     fetchQueue: [] as Array<{ target: RequestInfo | URL; init?: RequestInit; resolve: (v: Response) => void; reject: (v: unknown) => void }>,
     originalScrollTo: null as typeof window.scrollTo | null,
     rICMessagePort: null as MessagePort | null,
@@ -807,8 +793,7 @@ export default definePlugin({
     memberListGradientEl: null as HTMLStyleElement | null,
     memberFreezeEl: null as HTMLStyleElement | null,
     memberFreezeTimer: null as ReturnType<typeof setInterval> | null,
-    coalesceTimer: null as ReturnType<typeof requestAnimationFrame> | null,
-    coalesceQueue: new Map<string, number>(),
+    memberFreezeRefreshTimer: null as ReturnType<typeof setTimeout> | null,
     websocketPatchEl: null as HTMLStyleElement | null,
     spellcheckObserver: null as MutationObserver | null,
 
@@ -855,7 +840,6 @@ export default definePlugin({
         try { if (settings.store.suppressAllCanvas) this.installCanvasSuppressor(); } catch (e) { logger.warn("installCanvasSuppressor failed", e); }
         try { if (settings.store.disableChannelTopic) this.installChannelTopicKiller(); } catch (e) { logger.warn("installChannelTopicKiller failed", e); }
         try { if (settings.store.disableFolderAnimations) this.installFolderAnimationKiller(); } catch (e) { logger.warn("installFolderAnimationKiller failed", e); }
-        try { if (settings.store.coalesceReactionCounters) this.installReactionCoalescer(); } catch (e) { logger.warn("installReactionCoalescer failed", e); }
         try { if (settings.store.disableInvitePreviews) this.installInvitePreviewKiller(); } catch (e) { logger.warn("installInvitePreviewKiller failed", e); }
         try { if (settings.store.unifiedMemberListGradient) this.installMemberListGradient(); } catch (e) { logger.warn("installMemberListGradient failed", e); }
         try { if (settings.store.freezeMemberList) this.installMemberFreezer(); } catch (e) { logger.warn("installMemberFreezer failed", e); }
@@ -917,7 +901,6 @@ export default definePlugin({
         this.teardownCanvasSuppressor();
         this.teardownChannelTopicKiller();
         this.teardownFolderAnimationKiller();
-        this.teardownReactionCoalescer();
         this.teardownFluxThrottle();
         this.teardownInvitePreviewKiller();
         this.teardownMemberListGradient();
@@ -1429,6 +1412,28 @@ export default definePlugin({
             const originalSrc = img.currentSrc || img.src;
             let frozenUrl: string | null = null;
 
+            const onLoad = () => buildFrozen();
+            const onEnter = () => {
+                img.dataset.opGifState = "playing";
+                img.src = originalSrc;
+            };
+            const onLeave = () => {
+                img.dataset.opGifState = "frozen";
+                if (frozenUrl) img.src = frozenUrl;
+            };
+
+            const cleanup = () => {
+                img.removeEventListener("mouseenter", onEnter);
+                img.removeEventListener("mouseleave", onLeave);
+                img.removeEventListener("load", onLoad);
+                if (frozenUrl) { URL.revokeObjectURL(frozenUrl); blobUrls.delete(frozenUrl); }
+                frozenUrl = null;
+                this.gifManagedImages.delete(img);
+                delete img.dataset.opGifState;
+                delete (img as any).__opCleanup;
+            };
+
+            // ponytail: Discord CDN gifs are cross-origin without crossorigin set, so toBlob taints and throws — untrack rather than leak listeners on an image we can't freeze
             const buildFrozen = () => {
                 if (frozenUrl) return frozenUrl;
                 if (!img.naturalWidth || !img.naturalHeight) return null;
@@ -1446,32 +1451,17 @@ export default definePlugin({
                     }, "image/png");
                     return null;
                 } catch {
+                    cleanup();
                     return null;
                 }
             };
 
-            const onLoad = () => buildFrozen();
-            if (img.complete) buildFrozen(); else img.addEventListener("load", onLoad, { once: true });
-
             img.dataset.opGifState = "frozen";
-            const onEnter = () => {
-                img.dataset.opGifState = "playing";
-                img.src = originalSrc;
-            };
-            const onLeave = () => {
-                img.dataset.opGifState = "frozen";
-                if (frozenUrl) img.src = frozenUrl;
-            };
             img.addEventListener("mouseenter", onEnter);
             img.addEventListener("mouseleave", onLeave);
+            (img as any).__opCleanup = cleanup;
 
-            (img as any).__opCleanup = () => {
-                img.removeEventListener("mouseenter", onEnter);
-                img.removeEventListener("mouseleave", onLeave);
-                img.removeEventListener("load", onLoad);
-                if (frozenUrl) { URL.revokeObjectURL(frozenUrl); blobUrls.delete(frozenUrl); }
-                frozenUrl = null;
-            };
+            if (img.complete) buildFrozen(); else img.addEventListener("load", onLoad, { once: true });
         };
 
         document.querySelectorAll<HTMLImageElement>("img").forEach(freeze);
@@ -2210,9 +2200,11 @@ export default definePlugin({
                     if (last && last > cutoff) continue;
                     const msgs = allChannels[chId];
                     if (!msgs || typeof msgs.size !== "number" || msgs.size <= 50) continue;
+                    // ponytail: pokes MessageStore internals (_messagesByChannel/.slice); will no-op if Discord renames them
+                    if (typeof msgs.slice !== "function") continue;
                     const targetSize = Math.max(50, Math.floor(msgs.size * 0.5));
                     if (store._messagesByChannel) {
-                        store._messagesByChannel[chId] = msgs.slice?.(0, targetSize) ?? msgs;
+                        store._messagesByChannel[chId] = msgs.slice(0, targetSize);
                     }
                     trimmed++;
                 }
@@ -2243,7 +2235,7 @@ export default definePlugin({
         if (maxConcurrent <= 0) return;
         const origFetch = window.fetch;
         const queue = this.fetchQueue;
-        let active = this.activeFetchCount;
+        let active = 0;
 
         const processQueue = () => {
             while (active < maxConcurrent && queue.length) {
@@ -2283,7 +2275,6 @@ export default definePlugin({
             (this as any).__origFetchLimited = undefined;
         }
         this.fetchQueue = [];
-        this.activeFetchCount = 0;
     },
 
     installConsoleWarnSuppression() {
@@ -2438,7 +2429,7 @@ export default definePlugin({
             try {
                 const url = new URL(src, window.location.origin);
                 const size = url.searchParams.get("size");
-                if (!size || Number(size) > 32) url.searchParams.set("size", "32");
+                if (!size || Number(size) > 64) url.searchParams.set("size", "64");
                 if (url.toString() !== src) img.src = url.toString();
             } catch { /* ignore */ }
         };
@@ -2742,18 +2733,6 @@ export default definePlugin({
         }
     },
 
-    installReactionCoalescer() {
-        if (settings.store.verboseLogging) logger.info("Reaction coalescer skipped because Discord already batches reaction count renders");
-    },
-
-    teardownReactionCoalescer() {
-        this.coalesceQueue.clear();
-        if (this.coalesceTimer !== null) {
-            cancelAnimationFrame(this.coalesceTimer);
-            this.coalesceTimer = null;
-        }
-    },
-
     installInvitePreviewKiller() {
         const css = `
 [class*="chat_"] [class*="invite_"]{display:none!important}
@@ -2812,7 +2791,8 @@ export default definePlugin({
             const el = this.memberFreezeEl;
             if (el && el.parentNode) {
                 el.remove();
-                setTimeout(() => {
+                this.memberFreezeRefreshTimer = setTimeout(() => {
+                    this.memberFreezeRefreshTimer = null;
                     if (this.memberFreezeEl && !this.memberFreezeEl.parentNode) {
                         document.head.appendChild(this.memberFreezeEl);
                     }
@@ -2825,6 +2805,10 @@ export default definePlugin({
         if (this.memberFreezeTimer !== null) {
             clearInterval(this.memberFreezeTimer);
             this.memberFreezeTimer = null;
+        }
+        if (this.memberFreezeRefreshTimer !== null) {
+            clearTimeout(this.memberFreezeRefreshTimer);
+            this.memberFreezeRefreshTimer = null;
         }
         if (this.memberFreezeEl) {
             this.memberFreezeEl.remove();
