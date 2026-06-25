@@ -1,15 +1,15 @@
 {
-    "name": "testcord",
+    "name": "lithuim",
     "private": "true",
     "version": "2.1.1",
-    "description": "The less stable fork of Equicord",
-    "homepage": "https://github.com/TestcordDev/Testcord#readme",
+    "description": "The most unstable fork of Vencord",
+    "homepage": "https://github.com/valvicthe/Lithium#readme",
     "bugs": {
-        "url": "https://github.com/TestcordDev/Testcord/issues"
+        "url": "https://github.com/valvicthe/Lithium"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/TestcordDev/Testcord.git"
+        "url": "git+https://github.com/valvicthe/Lithium.git"
     },
     "license": "GPL-3.0-or-later",
     "author": "x2b",
