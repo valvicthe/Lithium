@@ -59,7 +59,7 @@ async function syncSettings() {
             // User switched to an account that isn't connected to cloud
             showNotification({
                 title: "Cloud Settings",
-                body: "Cloud sync was disabled because this account isn't connected to the cloud App. You can enable it again by connecting this account in Cloud Settings. (note: it will store your preferences separately)",
+                body: "cloud sync was disabled because this account isn't connected to the cloud app. You can enable it again by connecting this account in Cloud Settings. (note: it will store your preferences separately)",
                 color: "var(--yellow-360)",
                 onClick: () => SettingsRouter.openUserSettings("equicord_cloud_panel")
             });
@@ -77,8 +77,8 @@ async function syncSettings() {
         // show a notification letting them know and tell them how to fix it
         showNotification({
             title: "Cloud Integrations",
-            body: "We've noticed you have cloud integrations enabled in another client! Due to limitations, you will " +
-                "need to re-authenticate to continue using them. Click here to go to the settings page to do so!",
+            body: "i noticed you have cloud integrations enabled in another client! Due to limitations, you will " +
+                "need to re-authenticate to continue using them. click here to go to the settings page to do so!",
             color: "var(--yellow-360)",
             onClick: () => SettingsRouter.openUserSettings("equicord_cloud_panel")
         });
@@ -99,7 +99,7 @@ async function syncSettings() {
             // of the possible ones it has (such as when your settings are newer).
             showNotification({
                 title: "Cloud Settings",
-                body: "Your settings have been updated! Click here to restart to fully apply changes!",
+                body: "ur settings have been updated! click here to apply changes!",
                 color: "var(--green-360)",
                 onClick: relaunch
             });
@@ -146,8 +146,8 @@ async function runUpdateCheck() {
                 notifiedForUpdatesThisSession = true;
 
                 showNotice(
-                    "Testcord has been updated for u!",
-                    "Restart",
+                    "lithium has been updated :3",
+                    "finish update",
                     relaunch
                 );
             }
@@ -158,12 +158,12 @@ async function runUpdateCheck() {
         notifiedForUpdatesThisSession = true;
 
         showNotice(
-            "A new version of Testcord is available!",
-            "View Update",
+            "a new version of lithium is available! >-<",
+            "update",
             () => openSettingsTabModal(UpdaterTab!)
         );
     } catch (err) {
-        UpdateLogger.error("Failed to check for updates", err);
+        UpdateLogger.error("Failed to check for updates D:", err);
     }
 }
 
@@ -176,13 +176,13 @@ function initTrayIpc() {
             VencordNative.tray.setUpdateState(isOutdated);
 
             if (isOutdated) {
-                showNotice("A Testcord update is available!", "View Update", () => openSettingsTabModal(UpdaterTab!));
+                showNotice("a lithium update is available! >-<", "update", () => openSettingsTabModal(UpdaterTab!));
             } else {
-                showNotice("No updates available, you're on the latest version!", "OK", popNotice);
+                showNotice("ur all up to date!", "oki :3", popNotice);
             }
         } catch (err) {
-            UpdateLogger.error("Failed to check for updates from tray", err);
-            showNotice("Failed to check for updates, check the console for more info", "OK", popNotice);
+            UpdateLogger.error("failed to check for updates from tray", err);
+            showNotice("failed to check for updates, check the console for more info", "oki", popNotice);
         }
     });
 
@@ -191,7 +191,7 @@ function initTrayIpc() {
             await update();
             relaunch();
         } catch (err) {
-            UpdateLogger.error("Failed to repair Equicord", err);
+            UpdateLogger.error("failed to repair lithium. rest in peace.", err);
         }
     });
 
@@ -218,9 +218,9 @@ async function init() {
         if (pendingPatches.length)
             PMLogger.warn(
                 "Webpack has finished initialising, but some patches haven't been applied yet.",
-                "This might be expected since some Modules are lazy loaded, but please verify",
+                "This might be expected since some modules are lazy loaded, but please verify",
                 "that all plugins are working as intended.",
-                "You are seeing this warning because this is a Development build of TestCord.",
+                "you are seeing this warning because this is a development build of lithium.",
                 "\nThe following patches have not been applied:",
                 "\n\n" + pendingPatches.map(p => `${p.plugin}: ${p.find}`).join("\n")
             );
