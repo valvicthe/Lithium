@@ -8,7 +8,7 @@ env:
     FORCE_COLOR: true
     GITHUB_TOKEN: ${{ secrets.ETOKEN }}
     GH_TOKEN: ${{ github.token }}
-    REPO: TestcordDev/TestCord
+    REPO: valvicthe/Lithium
     USERNAME: GitHub-Actions
 
 permissions:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
     Build:
-        name: Build Testcord
+        name: Build lithium
         runs-on: ubuntu-latest
 
         steps:
@@ -75,7 +75,7 @@ jobs:
                       echo "Release 'latest' exists, uploading files..."
                   else
                       echo "Creating release 'latest'..."
-                      gh release create latest --title "Testcord Latest" --notes "Automated release" --generate-notes
+                      gh release create latest --title "lithium Latest" --notes "Automated release" --generate-notes
                   fi
 
             - name: Upload to latest release
